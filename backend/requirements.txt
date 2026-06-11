@@ -16,6 +16,7 @@ pydantic-settings==2.2.1
 # ── Autenticación JWT ─────────────────────────────────────────────────────────
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
 
 # ── Google Cloud / Vertex AI ──────────────────────────────────────────────────
 google-cloud-aiplatform==1.52.0
