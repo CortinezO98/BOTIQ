@@ -1,134 +1,133 @@
 # 🤖 BOTIQ — Corporate Intelligent Chatbot
 
-> Chatbot corporativo con Vertex AI (Google Cloud), RAG sobre Google Drive,
-> validación de servidores y dashboard de métricas.
-> **Stack:** FastAPI · React · PostgreSQL · ChromaDB · Docker
+BOTIQ es un chatbot corporativo con FastAPI, React, PostgreSQL, ChromaDB, Vertex AI, Google Drive RAG, gestión de usuarios, FAQs y dashboard administrativo.
+
+## Stack
+
+- Backend: FastAPI + SQLAlchemy async + PostgreSQL + Alembic
+- Frontend: React + Vite
+- IA: Google Vertex AI / Gemini
+- RAG: Google Drive + ChromaDB + embeddings
+- Infra: Docker Compose + Nginx para producción
 
 ---
 
-## ⚡ Inicio Rápido (Docker)
+## Inicio rápido en desarrollo
 
 ```bash
-# 1. Clonar el repositorio
 git clone https://github.com/cortinezo98/BOTIQ.git
 cd BOTIQ
 
-# 2. Configurar variables de entorno
-cp backend/.env.example backend/.env
-# Editar backend/.env con tus credenciales
-
-# 3. Colocar el service account de Google Cloud
-# Copiar service-account.json a: backend/credentials/service-account.json
-
-# 4. Levantar todo con Docker
-docker-compose up --build
-
-# 5. (Primera vez) Ejecutar migraciones
-docker-compose run --rm migrate
-
-# 6. Crear usuario administrador
-curl -X POST http://localhost:8000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@empresa.com","full_name":"Admin","password":"Admin123!","role":"admin"}'
+copy backend\.env.example backend\.env
+docker compose up -d --build
 ```
 
-**URLs:**
-| Servicio | URL |
-|---------|-----|
-| Frontend | http://localhost:5173 |
-| Backend API | http://localhost:8000 |
-| Swagger Docs | http://localhost:8000/docs |
-
----
-
-## 🧩 Módulos
-
-| Módulo | Descripción | Rol requerido |
-|--------|-------------|---------------|
-| **Empleados** | FAQ + Gemini Pro para consultas generales | Todos |
-| **Soporte RAG** | Base de conocimiento desde Google Drive | Ingeniero de Soporte |
-| **Servidores** | Validación API del tablero + Gemini | Ingeniero de Soporte |
-| **Dashboard** | Métricas, tokens, brechas de conocimiento | Admin |
-
----
-
-## 🔐 Roles
-
-| Rol | Descripción |
-|-----|-------------|
-| `employee` | Chat general + FAQ |
-| `support_engineer` | + RAG + Servidores |
-| `admin` | + Dashboard + Gestión FAQs |
-
----
-
-## 📁 Estructura
-
-```
-BOTIQ/
-├── backend/              # FastAPI + Python 3.11
-│   ├── app/
-│   │   ├── api/v1/       # Endpoints REST
-│   │   ├── core/         # Config, roles, seguridad
-│   │   ├── modules/      # employee_bot, support_rag, server_monitor
-│   │   ├── services/     # vertex/, gdrive, gcs, metrics
-│   │   └── models/       # SQLAlchemy ORM
-│   ├── credentials/      # service-account.json (NO en git)
-│   └── tests/
-├── frontend/             # React + Vite
-│   └── src/
-│       ├── components/   # ChatWidget, Dashboard
-│       ├── pages/        # Login, Chat, Dashboard
-│       └── embed/        # Widget embebible
-├── docker-compose.yml
-└── docs/
-```
-
----
-
-## 🔧 Comandos útiles Docker
+Crear tablas en desarrollo si aún no tienes migraciones aplicadas:
 
 ```bash
-# Ver logs en tiempo real
-docker-compose logs -f backend
-docker-compose logs -f frontend
+docker compose exec backend python init_db.py
+```
 
-# Ejecutar migraciones manualmente
-docker-compose run --rm migrate
+Crear o actualizar usuario administrador:
 
-# Abrir shell en el backend
-docker-compose exec backend bash
+```bash
+docker compose exec backend python create_admin.py
+```
 
-# Correr tests
-docker-compose exec backend pytest tests/ -v
+## URLs de desarrollo
 
-# Reiniciar solo el backend
-docker-compose restart backend
+| Servicio | URL |
+|---|---|
+| Frontend | http://localhost:5180 |
+| Backend API | http://localhost:8002 |
+| Swagger Docs | http://localhost:8002/docs |
+| Health | http://localhost:8002/health |
+| ChromaDB | http://localhost:8003 |
+| PostgreSQL | localhost:5433 |
 
-# Limpiar todo (¡borra datos!)
-docker-compose down -v
+## Login API
+
+```bash
+curl -X POST http://localhost:8002/api/v1/auth/login \
+  -F "username=admin@empresa.com" \
+  -F "password=Admin123!"
 ```
 
 ---
 
-## 🌐 Embeber el widget en otras páginas
+## Roles
 
-```html
-<div id="botiq-root"></div>
-<script src="https://tu-dominio.com/botiq-widget.iife.js"></script>
-<script>
-  BotiqWidget.init({
-    apiUrl: 'https://tu-api-botiq.com',
-    primaryColor: '#1E3A5F',
-    position: 'bottom-right',
-    authToken: 'JWT_DEL_USUARIO'  // opcional
-  });
-</script>
+| Rol | Descripción |
+|---|---|
+| `employee` | Chat general + FAQs |
+| `support_engineer` | Chat general + RAG + Servidores |
+| `admin` | Todo lo anterior + dashboard + usuarios + FAQs |
+
+---
+
+## Módulos
+
+| Módulo | Descripción |
+|---|---|
+| Empleados | FAQ + Gemini para consultas generales |
+| Soporte RAG | Respuestas desde Google Drive y ChromaDB |
+| Servidores | Validación de estado de infraestructura |
+| Dashboard | Métricas, brechas, tokens y FAQs |
+| Administración | Gestión de usuarios y FAQs |
+
+---
+
+## Comandos útiles
+
+```bash
+docker compose ps
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose restart backend
+docker compose exec backend pytest tests/ -v
+docker compose down
+docker compose down -v
 ```
 
 ---
 
-## 📖 Documentación adicional
+## Producción
 
-- [Guía de despliegue completa](docs/deployment.md)
-- [Arquitectura técnica](docs/architecture.md)
+Crear archivo real de producción:
+
+```bash
+copy backend\.env.prod.example backend\.env.prod
+```
+
+Levantar:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+---
+
+## Estructura principal
+
+```text
+BOTIQ/
+├── backend/
+│   ├── app/
+│   │   ├── api/v1/routes/
+│   │   ├── core/
+│   │   ├── db/
+│   │   ├── models/
+│   │   ├── modules/
+│   │   ├── schemas/
+│   │   └── services/
+│   └── tests/
+├── frontend/
+│   └── src/
+│       ├── components/
+│       ├── hooks/
+│       ├── pages/
+│       └── services/
+├── infra/nginx/
+├── docs/
+└── docker-compose.yml
+```

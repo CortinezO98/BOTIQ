@@ -1,0 +1,17 @@
+Archivos completos para reemplazar en BOTIQ
+
+README.md
+backend/.env.prod.example
+backend/app/api/v1/routes/chat.py
+backend/app/api/v1/routes/employees.py
+backend/app/modules/employee_bot/service.py
+backend/app/schemas/chat.py
+backend/create_admin.py
+frontend/Dockerfile.prod
+frontend/src/App.jsx
+frontend/src/components/Layout/Navbar.jsx
+frontend/src/pages/FaqsPage.jsx
+frontend/src/pages/KnowledgeBasePage.jsx
+frontend/src/pages/UsersPage.jsx
+frontend/src/services/api.js
+infra/nginx/nginx.conf
