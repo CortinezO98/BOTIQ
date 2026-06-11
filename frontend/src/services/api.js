@@ -43,7 +43,8 @@ export const chatAPI = {
 
 export const faqAPI = {
   list: () => api.get("/employees/faqs"),
-  create: (q, a, c) => api.post(`/employees/faqs?question=${encodeURIComponent(q)}&answer=${encodeURIComponent(a)}&category=${encodeURIComponent(c||"")}`),
+  create: (data) => api.post("/employees/faqs", data),
+  update: (id, data) => api.put(`/employees/faqs/${id}`, data),
   remove: (id) => api.delete(`/employees/faqs/${id}`),
 };
 
