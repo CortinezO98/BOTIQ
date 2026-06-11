@@ -1,50 +1,57 @@
 """
-Cliente base para Vertex AI.
-Inicializa la autenticación con Google Cloud usando ADC o Service Account.
+Cliente base Vertex AI — inicialización con manejo graceful.
+Si no hay credenciales configuradas, el bot opera en modo degradado
+(respuestas de fallback) sin crashear el servidor.
 """
 
-import vertexai
-from google.oauth2 import service_account
-from google.auth import default as google_auth_default
 import os
-
+import vertexai
 from app.core.config import settings
 
+_vertex_initialized = False
 
-def init_vertex_ai():
+
+def init_vertex_ai() -> bool:
     """
-    Inicializa Vertex AI con las credenciales configuradas.
-    - En desarrollo: usa el archivo JSON del Service Account
-    - En producción (GKE/Cloud Run): usa Application Default Credentials (ADC)
+    Inicializa Vertex AI. Retorna True si fue exitoso.
+    No lanza excepción si falla — modo degradado.
     """
-    credentials_path = settings.GOOGLE_APPLICATION_CREDENTIALS
+    global _vertex_initialized
 
-    if credentials_path and os.path.exists(credentials_path):
-        credentials = service_account.Credentials.from_service_account_file(
-            credentials_path,
-            scopes=["https://www.googleapis.com/auth/cloud-platform"],
-        )
-        vertexai.init(
-            project=settings.GCP_PROJECT_ID,
-            location=settings.GCP_LOCATION,
-            credentials=credentials,
-        )
-    else:
-        # Usar Application Default Credentials
-        credentials, project = google_auth_default(
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
-        )
-        vertexai.init(
-            project=settings.GCP_PROJECT_ID or project,
-            location=settings.GCP_LOCATION,
-            credentials=credentials,
-        )
+    if _vertex_initialized:
+        return True
 
-    print(f"✅ Vertex AI inicializado — Proyecto: {settings.GCP_PROJECT_ID}, Región: {settings.GCP_LOCATION}")
+    if not settings.GCP_PROJECT_ID:
+        print("⚠️  GCP_PROJECT_ID no configurado — Vertex AI deshabilitado (modo demo)")
+        return False
+
+    try:
+        creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS
+        if creds_path and os.path.exists(creds_path):
+            from google.oauth2 import service_account
+            credentials = service_account.Credentials.from_service_account_file(
+                creds_path,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+            vertexai.init(
+                project=settings.GCP_PROJECT_ID,
+                location=settings.GCP_LOCATION,
+                credentials=credentials,
+            )
+        else:
+            vertexai.init(
+                project=settings.GCP_PROJECT_ID,
+                location=settings.GCP_LOCATION,
+            )
+
+        _vertex_initialized = True
+        print(f"✅ Vertex AI inicializado — Proyecto: {settings.GCP_PROJECT_ID}")
+        return True
+
+    except Exception as e:
+        print(f"⚠️  Vertex AI no inicializado: {e}")
+        return False
 
 
-# Inicializar al importar el módulo
-try:
-    init_vertex_ai()
-except Exception as e:
-    print(f"⚠️ Vertex AI no inicializado (modo local sin credenciales): {e}")
+def is_vertex_available() -> bool:
+    return _vertex_initialized

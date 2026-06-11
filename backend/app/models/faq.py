@@ -1,12 +1,8 @@
-"""
-Modelo de preguntas frecuentes (FAQ) para el módulo de empleados.
-"""
-
+"""Modelo FAQ."""
 from sqlalchemy import Column, String, Text, Boolean, DateTime, Integer
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from datetime import datetime, timezone
 import uuid
-
 from app.db.session import Base
 
 
@@ -19,10 +15,7 @@ class FAQ(Base):
     category = Column(String(100), nullable=True, index=True)
     tags = Column(ARRAY(String), nullable=True)
     is_active = Column(Boolean, default=True)
-    hit_count = Column(Integer, default=0)     # Cuántas veces se respondió esta FAQ
+    hit_count = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
-
-    def __repr__(self):
-        return f"<FAQ: {self.question[:60]}>"

@@ -1,8 +1,3 @@
-/**
- * Cliente HTTP centralizado con Axios.
- * Interceptores para JWT automático y manejo de errores.
- */
-
 import axios from "axios";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
@@ -13,70 +8,55 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// ── Interceptor de request: añade JWT automáticamente ────────────────────────
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("botiq_token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("botiq_token");
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
-// ── Interceptor de response: manejo de errores globales ──────────────────────
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
+  (r) => r,
+  (err) => {
+    if (err.response?.status === 401) {
       localStorage.removeItem("botiq_token");
       localStorage.removeItem("botiq_user");
       window.location.href = "/login";
     }
-    return Promise.reject(error);
+    return Promise.reject(err);
   }
 );
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
 export const authAPI = {
   login: (email, password) => {
     const form = new FormData();
     form.append("username", email);
     form.append("password", password);
-    return api.post("/auth/login", form, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    return api.post("/auth/login", form, { headers: { "Content-Type": "multipart/form-data" } });
   },
   register: (data) => api.post("/auth/register", data),
   me: () => api.get("/auth/me"),
 };
 
-// ── Chat ─────────────────────────────────────────────────────────────────────
 export const chatAPI = {
   sendMessage: (data) => api.post("/chat/message", data),
 };
 
-// ── FAQ ───────────────────────────────────────────────────────────────────────
 export const faqAPI = {
   list: () => api.get("/employees/faqs"),
   create: (data) => api.post("/employees/faqs", data),
   remove: (id) => api.delete(`/employees/faqs/${id}`),
 };
 
-// ── Servidores ────────────────────────────────────────────────────────────────
 export const serversAPI = {
   status: () => api.get("/servers/status"),
   analysis: () => api.get("/servers/analysis"),
 };
 
-// ── Dashboard ─────────────────────────────────────────────────────────────────
 export const dashboardAPI = {
   metrics: (days = 30) => api.get(`/dashboard/metrics?days=${days}`),
   summary: () => api.get("/dashboard/summary"),
 };
 
-// ── Soporte RAG ───────────────────────────────────────────────────────────────
 export const supportAPI = {
   syncKnowledgeBase: () => api.post("/support/sync-knowledge-base"),
   knowledgeBaseStatus: () => api.get("/support/knowledge-base/status"),

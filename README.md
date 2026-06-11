@@ -1,179 +1,134 @@
 # 🤖 BOTIQ — Corporate Intelligent Chatbot
 
-> Plataforma de chatbot corporativo con IA basada en Vertex AI (Google Cloud), RAG sobre Google Drive, validación de servidores y dashboard de métricas.
+> Chatbot corporativo con Vertex AI (Google Cloud), RAG sobre Google Drive,
+> validación de servidores y dashboard de métricas.
+> **Stack:** FastAPI · React · PostgreSQL · ChromaDB · Docker
 
 ---
 
-## 📋 Tabla de Contenidos
+## ⚡ Inicio Rápido (Docker)
 
-- [Arquitectura](#arquitectura)
-- [Módulos](#módulos)
-- [Requisitos](#requisitos)
-- [Instalación](#instalación)
-- [Variables de Entorno](#variables-de-entorno)
-- [Ejecutar el Proyecto](#ejecutar-el-proyecto)
-- [Estructura del Proyecto](#estructura-del-proyecto)
-- [API Endpoints](#api-endpoints)
-- [Roles y Seguridad](#roles-y-seguridad)
-- [Despliegue](#despliegue)
+```bash
+# 1. Clonar el repositorio
+git clone https://github.com/cortinezo98/BOTIQ.git
+cd BOTIQ
 
----
+# 2. Configurar variables de entorno
+cp backend/.env.example backend/.env
+# Editar backend/.env con tus credenciales
 
-## 🏛️ Arquitectura
+# 3. Colocar el service account de Google Cloud
+# Copiar service-account.json a: backend/credentials/service-account.json
 
+# 4. Levantar todo con Docker
+docker-compose up --build
+
+# 5. (Primera vez) Ejecutar migraciones
+docker-compose run --rm migrate
+
+# 6. Crear usuario administrador
+curl -X POST http://localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@empresa.com","full_name":"Admin","password":"Admin123!","role":"admin"}'
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    GOOGLE CLOUD PROJECT                  │
-│                                                         │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │              VERTEX AI                          │   │
-│  │  Gemini Pro · Gemini Vision · Embeddings        │   │
-│  │  Vector Search · Document AI · Cloud Vision     │   │
-│  └─────────────────────────────────────────────────┘   │
-│                                                         │
-│  ┌──────────────┐    ┌─────────────────────────────┐   │
-│  │ Google Drive │    │    Cloud Storage (GCS)      │   │
-│  │  (Docs RAG)  │    │  (Imágenes, archivos temp)  │   │
-│  └──────────────┘    └─────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-              │                    │
-              ▼                    ▼
-    ┌─────────────────┐   ┌──────────────────┐
-    │  FastAPI Backend│   │  React Frontend  │
-    │  Python 3.11    │   │  Vite + Tailwind │
-    └─────────────────┘   └──────────────────┘
-              │
-              ▼
-    ┌─────────────────┐
-    │   PostgreSQL    │
-    │   (Métricas,    │
-    │   Usuarios,     │
-    │   Conversacion) │
-    └─────────────────┘
-```
+
+**URLs:**
+| Servicio | URL |
+|---------|-----|
+| Frontend | http://localhost:5173 |
+| Backend API | http://localhost:8000 |
+| Swagger Docs | http://localhost:8000/docs |
 
 ---
 
 ## 🧩 Módulos
 
-| Módulo | Descripción | Roles |
-|--------|-------------|-------|
-| **Empleados** | FAQ + Gemini para preguntas frecuentes corporativas | Todos |
-| **Ingeniero de Soporte** | RAG sobre base de conocimiento en Google Drive | Ing. Soporte + Admin |
-| **Validación de Servidores** | Consulta API del tablero + análisis con Gemini | Bot interno (todos ven resultado) |
-| **Dashboard** | Métricas, consultas frecuentes, estado de servidores | Admin |
+| Módulo | Descripción | Rol requerido |
+|--------|-------------|---------------|
+| **Empleados** | FAQ + Gemini Pro para consultas generales | Todos |
+| **Soporte RAG** | Base de conocimiento desde Google Drive | Ingeniero de Soporte |
+| **Servidores** | Validación API del tablero + Gemini | Ingeniero de Soporte |
+| **Dashboard** | Métricas, tokens, brechas de conocimiento | Admin |
 
 ---
 
-## ⚙️ Requisitos
+## 🔐 Roles
 
-- Python 3.11+
-- Node.js 20+
-- Docker + Docker Compose
-- Cuenta Google Cloud con Vertex AI habilitado
-- PostgreSQL 15+
-
----
-
-## 🚀 Instalación
-
-### 1. Clonar el repositorio
-
-```bash
-git clone https://github.com/TU_ORG/BOTIQ.git
-cd BOTIQ
-```
-
-### 2. Configurar variables de entorno
-
-```bash
-cp backend/.env.example backend/.env
-# Editar backend/.env con tus credenciales
-```
-
-### 3. Levantar con Docker Compose
-
-```bash
-docker-compose up --build
-```
-
-### 4. Ejecutar migraciones
-
-```bash
-docker-compose exec backend alembic upgrade head
-```
+| Rol | Descripción |
+|-----|-------------|
+| `employee` | Chat general + FAQ |
+| `support_engineer` | + RAG + Servidores |
+| `admin` | + Dashboard + Gestión FAQs |
 
 ---
 
-## 🔑 Variables de Entorno
-
-Ver [backend/.env.example](backend/.env.example) para la lista completa.
-
----
-
-## ▶️ Ejecutar el Proyecto
-
-```bash
-# Desarrollo local
-docker-compose up
-
-# Solo backend
-cd backend && uvicorn app.main:app --reload --port 8000
-
-# Solo frontend
-cd frontend && npm run dev
-```
-
-- **Backend API:** http://localhost:8000
-- **Swagger Docs:** http://localhost:8000/docs
-- **Frontend:** http://localhost:5173
-
----
-
-## 📁 Estructura del Proyecto
+## 📁 Estructura
 
 ```
 BOTIQ/
-├── backend/          # FastAPI + Python
-├── frontend/         # React + Vite
+├── backend/              # FastAPI + Python 3.11
+│   ├── app/
+│   │   ├── api/v1/       # Endpoints REST
+│   │   ├── core/         # Config, roles, seguridad
+│   │   ├── modules/      # employee_bot, support_rag, server_monitor
+│   │   ├── services/     # vertex/, gdrive, gcs, metrics
+│   │   └── models/       # SQLAlchemy ORM
+│   ├── credentials/      # service-account.json (NO en git)
+│   └── tests/
+├── frontend/             # React + Vite
+│   └── src/
+│       ├── components/   # ChatWidget, Dashboard
+│       ├── pages/        # Login, Chat, Dashboard
+│       └── embed/        # Widget embebible
 ├── docker-compose.yml
-└── .github/workflows # CI/CD
+└── docs/
 ```
 
 ---
 
-## 🔐 Roles y Seguridad
+## 🔧 Comandos útiles Docker
 
-| Rol | Acceso |
-|-----|--------|
-| `employee` | Chat general, FAQ, resultado de servidores |
-| `support_engineer` | + Base de conocimiento RAG |
-| `admin` | + Dashboard de métricas, gestión de FAQs |
+```bash
+# Ver logs en tiempo real
+docker-compose logs -f backend
+docker-compose logs -f frontend
 
----
+# Ejecutar migraciones manualmente
+docker-compose run --rm migrate
 
-## 📡 API Endpoints
+# Abrir shell en el backend
+docker-compose exec backend bash
 
-| Método | Ruta | Descripción | Rol |
-|--------|------|-------------|-----|
-| POST | `/api/v1/auth/login` | Autenticación | Público |
-| POST | `/api/v1/auth/register` | Registro | Público |
-| POST | `/api/v1/chat/message` | Enviar mensaje | Todos |
-| GET | `/api/v1/dashboard/metrics` | Métricas generales | Admin |
-| GET | `/api/v1/servers/status` | Estado de servidores | Ing. Soporte+ |
-| POST | `/api/v1/support/query` | Consulta RAG | Ing. Soporte+ |
+# Correr tests
+docker-compose exec backend pytest tests/ -v
 
----
+# Reiniciar solo el backend
+docker-compose restart backend
 
-## 🚢 Despliegue
-
-Ver [docs/deployment.md](docs/deployment.md) para instrucciones completas de despliegue en producción.
+# Limpiar todo (¡borra datos!)
+docker-compose down -v
+```
 
 ---
 
-## 📖 Referencias
+## 🌐 Embeber el widget en otras páginas
 
-- [SWEBOK v4](https://www.computer.org/education/bodies-of-knowledge/software-engineering)
-- [Vertex AI Documentation](https://cloud.google.com/vertex-ai/docs)
-- [FastAPI Documentation](https://fastapi.tiangolo.com)
-- [Google Drive API](https://developers.google.com/drive)
+```html
+<div id="botiq-root"></div>
+<script src="https://tu-dominio.com/botiq-widget.iife.js"></script>
+<script>
+  BotiqWidget.init({
+    apiUrl: 'https://tu-api-botiq.com',
+    primaryColor: '#1E3A5F',
+    position: 'bottom-right',
+    authToken: 'JWT_DEL_USUARIO'  // opcional
+  });
+</script>
+```
+
+---
+
+## 📖 Documentación adicional
+
+- [Guía de despliegue completa](docs/deployment.md)
+- [Arquitectura técnica](docs/architecture.md)

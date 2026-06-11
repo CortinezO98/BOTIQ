@@ -1,47 +1,28 @@
 /**
- * Entry point del widget embebible de BOTIQ.
- * Este archivo se compila como bundle IIFE para inserción en páginas externas.
+ * BOTIQ Widget embebible — insertar en cualquier página corporativa.
  *
- * CÓMO INCRUSTAR EN OTRA PÁGINA:
- * ─────────────────────────────────────────────────────────────────
- * 1. Agregar antes del </body>:
- *
- * <div id="botiq-widget-root"></div>
- * <script src="https://tu-dominio.com/botiq-widget.js"></script>
+ * USO:
+ * <div id="botiq-root"></div>
+ * <script src="https://tu-dominio/botiq-widget.iife.js"></script>
  * <script>
  *   BotiqWidget.init({
  *     apiUrl: 'https://tu-api.com',
+ *     authToken: 'JWT_DEL_USUARIO',   // opcional
  *     primaryColor: '#1E3A5F',
  *     position: 'bottom-right',
- *     authToken: 'JWT_DEL_USUARIO_AUTENTICADO',  // Opcional: si ya tiene sesión
  *   });
  * </script>
- * ─────────────────────────────────────────────────────────────────
  */
-
 import { createRoot } from "react-dom/client";
 import ChatWidget from "../components/ChatWidget";
 
-// API pública del widget
 window.BotiqWidget = {
-  init(config = {}) {
-    const {
-      apiUrl = "http://localhost:8000",
-      primaryColor = "#1E3A5F",
-      position = "bottom-right",
-      authToken = null,
-      containerId = "botiq-widget-root",
-    } = config;
+  _root: null,
 
-    // Guardar configuración
-    if (authToken) {
-      localStorage.setItem("botiq_token", authToken);
-    }
-
-    // Configurar URL de la API
+  init({ apiUrl = "http://localhost:8000", authToken = null, primaryColor = "#1E3A5F", position = "bottom-right", containerId = "botiq-root" } = {}) {
+    if (authToken) localStorage.setItem("botiq_token", authToken);
     window.__BOTIQ_API_URL__ = apiUrl;
 
-    // Crear contenedor si no existe
     let container = document.getElementById(containerId);
     if (!container) {
       container = document.createElement("div");
@@ -49,17 +30,13 @@ window.BotiqWidget = {
       document.body.appendChild(container);
     }
 
-    // Montar el widget React
-    const root = createRoot(container);
-    root.render(
-      <ChatWidget primaryColor={primaryColor} position={position} />
-    );
-
-    console.log("✅ BOTIQ Widget iniciado");
+    this._root = createRoot(container);
+    this._root.render(<ChatWidget primaryColor={primaryColor} position={position} />);
+    console.log("✅ BOTIQ Widget cargado");
   },
 
   destroy() {
-    const container = document.getElementById("botiq-widget-root");
-    if (container) container.remove();
+    this._root?.unmount();
+    document.getElementById("botiq-root")?.remove();
   },
 };

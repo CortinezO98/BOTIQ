@@ -1,42 +1,28 @@
-"""
-Rutas del módulo de empleados — gestión de FAQs.
-"""
-
-from fastapi import APIRouter, Depends, HTTPException, status
+"""Rutas de empleados — gestión de FAQs."""
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List
 import uuid
 
 from app.db.session import get_db
-from app.api.deps import require_admin, require_employee
+from app.api.deps import require_employee, require_admin
 from app.models.user import User
 from app.models.faq import FAQ
 
 router = APIRouter()
 
 
-@router.get("/faqs", tags=["FAQs"])
-async def list_faqs(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_employee),
-):
-    """Lista todas las FAQs activas."""
-    result = await db.execute(
-        select(FAQ).where(FAQ.is_active == True).order_by(FAQ.hit_count.desc())
-    )
+@router.get("/faqs")
+async def list_faqs(db: AsyncSession = Depends(get_db), _: User = Depends(require_employee)):
+    result = await db.execute(select(FAQ).where(FAQ.is_active == True).order_by(FAQ.hit_count.desc()))
     return result.scalars().all()
 
 
-@router.post("/faqs", status_code=status.HTTP_201_CREATED, tags=["FAQs"])
+@router.post("/faqs", status_code=201)
 async def create_faq(
-    question: str,
-    answer: str,
-    category: str = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    question: str, answer: str, category: str = None,
+    db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)
 ):
-    """Crea una nueva FAQ. Solo administradores."""
     faq = FAQ(question=question, answer=answer, category=category)
     db.add(faq)
     await db.commit()
@@ -44,13 +30,8 @@ async def create_faq(
     return faq
 
 
-@router.delete("/faqs/{faq_id}", tags=["FAQs"])
-async def delete_faq(
-    faq_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
-    """Desactiva una FAQ. Solo administradores."""
+@router.delete("/faqs/{faq_id}")
+async def delete_faq(faq_id: uuid.UUID, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     result = await db.execute(select(FAQ).where(FAQ.id == faq_id))
     faq = result.scalar_one_or_none()
     if not faq:

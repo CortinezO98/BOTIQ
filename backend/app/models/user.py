@@ -1,7 +1,4 @@
-"""
-Modelo de usuario del sistema BOTIQ.
-"""
-
+"""Modelo de usuario BOTIQ."""
 from sqlalchemy import Column, String, Boolean, DateTime, Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -25,8 +22,4 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
 
-    # Relaciones
     conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
-
-    def __repr__(self):
-        return f"<User {self.email} [{self.role}]>"

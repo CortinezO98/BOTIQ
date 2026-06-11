@@ -1,16 +1,10 @@
-"""
-Schemas Pydantic para validación de datos de usuario y autenticación.
-"""
-
+"""Schemas de usuario y autenticación."""
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 import uuid
-
 from app.core.roles import UserRole
 
-
-# ─── Request Schemas ─────────────────────────────────────────────────────────
 
 class UserRegister(BaseModel):
     email: EmailStr
@@ -24,8 +18,6 @@ class UserLogin(BaseModel):
     password: str
 
 
-# ─── Response Schemas ────────────────────────────────────────────────────────
-
 class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
@@ -34,16 +26,10 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
-
-
-class TokenData(BaseModel):
-    user_id: Optional[str] = None
-    role: Optional[str] = None

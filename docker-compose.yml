@@ -1,43 +1,8 @@
 version: "3.9"
 
 services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: botiq_backend
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql://botiq_user:botiq_pass@db:5432/botiq_db
-    env_file:
-      - ./backend/.env
-    volumes:
-      - ./backend:/app
-      - ./backend/credentials:/app/credentials:ro
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - botiq_network
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: botiq_frontend
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    depends_on:
-      - backend
-    restart: unless-stopped
-    networks:
-      - botiq_network
-
+  # ── Base de datos PostgreSQL ──────────────────────────────────────────────
   db:
     image: postgres:15-alpine
     container_name: botiq_db
@@ -58,6 +23,7 @@ services:
     networks:
       - botiq_network
 
+  # ── Vector DB para RAG ───────────────────────────────────────────────────
   chromadb:
     image: chromadb/chroma:latest
     container_name: botiq_chromadb
@@ -65,6 +31,71 @@ services:
       - "8001:8000"
     volumes:
       - chroma_data:/chroma/chroma
+    environment:
+      - CHROMA_SERVER_AUTHN_CREDENTIALS_PROVIDER=chromadb.auth.token.TokenConfigServerAuthCredentialsProvider
+    restart: unless-stopped
+    networks:
+      - botiq_network
+
+  # ── Backend FastAPI ────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: botiq_backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql://botiq_user:botiq_pass@db:5432/botiq_db
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+    volumes:
+      - ./backend:/app
+      - ./backend/credentials:/app/credentials:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - botiq_network
+
+  # ── Migraciones (corre una vez y termina) ─────────────────────────────────
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: botiq_migrate
+    command: alembic upgrade head
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql://botiq_user:botiq_pass@db:5432/botiq_db
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - botiq_network
+
+  # ── Frontend React ────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: botiq_frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api/v1
+    volumes:
+      - ./frontend/src:/app/src
+    depends_on:
+      - backend
     restart: unless-stopped
     networks:
       - botiq_network

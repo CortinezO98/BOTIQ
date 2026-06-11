@@ -1,36 +1,25 @@
-/**
- * Hook de autenticación: login, logout, estado del usuario.
- */
-
 import { useState, useCallback } from "react";
 import { authAPI } from "../services/api";
 
 export function useAuth() {
   const [user, setUser] = useState(() => {
-    const stored = localStorage.getItem("botiq_user");
-    return stored ? JSON.parse(stored) : null;
+    try { return JSON.parse(localStorage.getItem("botiq_user")); } catch { return null; }
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const login = useCallback(async (email, password) => {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
-      const response = await authAPI.login(email, password);
-      const { access_token, user: userData } = response.data;
-
-      localStorage.setItem("botiq_token", access_token);
-      localStorage.setItem("botiq_user", JSON.stringify(userData));
-      setUser(userData);
-      return userData;
+      const { data } = await authAPI.login(email, password);
+      localStorage.setItem("botiq_token", data.access_token);
+      localStorage.setItem("botiq_user", JSON.stringify(data.user));
+      setUser(data.user);
+      return data.user;
     } catch (err) {
-      const message = err.response?.data?.detail || "Error al iniciar sesión";
-      setError(message);
-      throw new Error(message);
-    } finally {
-      setLoading(false);
-    }
+      const msg = err.response?.data?.detail || "Error al iniciar sesión";
+      setError(msg); throw new Error(msg);
+    } finally { setLoading(false); }
   }, []);
 
   const logout = useCallback(() => {
@@ -39,8 +28,9 @@ export function useAuth() {
     setUser(null);
   }, []);
 
-  const isAdmin = user?.role === "admin";
-  const isSupport = user?.role === "support_engineer" || isAdmin;
-
-  return { user, loading, error, login, logout, isAdmin, isSupport };
+  return {
+    user, loading, error, login, logout,
+    isAdmin: user?.role === "admin",
+    isSupport: user?.role === "support_engineer" || user?.role === "admin",
+  };
 }

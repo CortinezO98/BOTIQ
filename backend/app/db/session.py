@@ -1,5 +1,5 @@
 """
-Configuración de la sesión de base de datos con SQLAlchemy async.
+Conexión a la base de datos con SQLAlchemy async.
 """
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
@@ -7,13 +7,20 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
-# Convertir URL de sync a async para SQLAlchemy
-DATABASE_URL = settings.DATABASE_URL.replace(
-    "postgresql://", "postgresql+asyncpg://"
-)
+
+def _get_async_url(url: str) -> str:
+    """Convierte URL sync a async para SQLAlchemy."""
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgresql+psycopg2://"):
+        return url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+    return url
+
+
+DATABASE_URL_ASYNC = _get_async_url(settings.DATABASE_URL)
 
 engine = create_async_engine(
-    DATABASE_URL,
+    DATABASE_URL_ASYNC,
     echo=settings.DEBUG,
     pool_pre_ping=True,
     pool_size=10,
@@ -31,10 +38,10 @@ class Base(DeclarativeBase):
     pass
 
 
-async def get_db() -> AsyncSession:
+async def get_db():
     """
-    Dependency injection para obtener sesión de BD en cada request.
-    Se cierra automáticamente al finalizar el request.
+    Dependency injection — sesión de BD por request.
+    Se cierra automáticamente al finalizar.
     """
     async with AsyncSessionLocal() as session:
         try:

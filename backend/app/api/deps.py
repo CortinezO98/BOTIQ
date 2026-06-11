@@ -1,8 +1,4 @@
-"""
-Dependencias reutilizables para FastAPI.
-SWEBOK v4: Inversión de dependencias — la autenticación no vive en los módulos de negocio.
-"""
-
+"""Dependencias reutilizables FastAPI — autenticación y roles."""
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,39 +16,27 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """
-    Obtiene el usuario autenticado desde el JWT.
-    """
     token_data = decode_token(token)
     result = await db.execute(
         select(User).where(User.id == token_data["user_id"], User.is_active == True)
     )
     user = result.scalar_one_or_none()
-
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario no encontrado o inactivo",
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado")
     return user
 
 
 def require_role(minimum_role: UserRole):
-    """
-    Factory de dependencia para verificar rol mínimo.
-    Uso: Depends(require_role(UserRole.SUPPORT_ENGINEER))
-    """
-    async def role_checker(current_user: User = Depends(get_current_user)) -> User:
+    async def checker(current_user: User = Depends(get_current_user)) -> User:
         if not has_minimum_role(current_user.role, minimum_role):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Acceso denegado. Se requiere rol: {minimum_role.value}",
             )
         return current_user
-    return role_checker
+    return checker
 
 
-# Dependencias predefinidas para cada rol
 require_employee = require_role(UserRole.EMPLOYEE)
-require_support = require_role(UserRole.SUPPORT_ENGINEER)
-require_admin = require_role(UserRole.ADMIN)
+require_support   = require_role(UserRole.SUPPORT_ENGINEER)
+require_admin     = require_role(UserRole.ADMIN)
