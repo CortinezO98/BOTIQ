@@ -19,11 +19,11 @@ def has_minimum_role(user_role: UserRole, required_role: UserRole) -> bool:
 
 
 MODULE_PERMISSIONS = {
-    "employee_chat":    [UserRole.EMPLOYEE, UserRole.SUPPORT_ENGINEER, UserRole.ADMIN],
-    "support_rag":      [UserRole.SUPPORT_ENGINEER, UserRole.ADMIN],
-    "server_validation":[UserRole.SUPPORT_ENGINEER, UserRole.ADMIN],
-    "dashboard":        [UserRole.ADMIN],
-    "faq_management":   [UserRole.ADMIN],
+    "employee_chat":     [UserRole.EMPLOYEE, UserRole.SUPPORT_ENGINEER, UserRole.ADMIN],
+    "support_rag":       [UserRole.SUPPORT_ENGINEER, UserRole.ADMIN],
+    "server_validation": [UserRole.SUPPORT_ENGINEER, UserRole.ADMIN],
+    "dashboard":         [UserRole.ADMIN],
+    "faq_management":    [UserRole.ADMIN],
 }
 
 

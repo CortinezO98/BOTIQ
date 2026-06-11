@@ -1,65 +1,58 @@
-import asyncio
-import getpass
+"""
+Crea el primer usuario administrador de BOTIQ.
 
-from sqlalchemy import select
-
-from app.db.session import AsyncSessionLocal
-
-# IMPORTANTE:
-# Importar todos los modelos relacionados para que SQLAlchemy registre las relaciones.
-from app.models.user import User
-from app.models.conversation import Conversation, Message
-from app.models.faq import FAQ
-from app.models.server_log import ServerLog
-from app.models.knowledge_gap import KnowledgeGap
-from app.models.audit_log import AuditLog
-
-from app.core.security import hash_password
-from app.core.roles import UserRole
+Windows CMD:  docker-compose exec backend python create_admin.py
+Linux/Mac:    docker-compose exec backend python create_admin.py
+"""
+import asyncio, sys
 
 
 async def main():
-    print("=== Crear primer usuario administrador BOTIQ ===")
-
-    email = input("Email admin: ").strip().lower()
-    full_name = input("Nombre completo: ").strip()
-    password = getpass.getpass("Contraseña: ").strip()
-    confirm = getpass.getpass("Confirmar contraseña: ").strip()
-
+    print("\n🤖 BOTIQ — Crear usuario administrador")
+    print("=" * 45)
+    email = input("Email:      ").strip()
+    full_name = input("Nombre:     ").strip()
+    password = input("Contraseña: ").strip()
     if not email or not full_name or not password:
-        print("Todos los campos son obligatorios.")
-        return
+        print("❌ Todos los campos son obligatorios"); sys.exit(1)
+    if len(password) < 8:
+        print("❌ La contraseña debe tener al menos 8 caracteres"); sys.exit(1)
 
-    if password != confirm:
-        print("Las contraseñas no coinciden.")
-        return
+    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+    from sqlalchemy import select
+    from app.core.config import settings
+    from app.core.security import hash_password
+    from app.core.roles import UserRole
+    from app.db.session import Base
+    from app.models.user import User
+    from app.models import conversation, faq, server_log, knowledge_gap, audit_log  # noqa
 
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.email == email))
-        user = result.scalar_one_or_none()
+    db_url = settings.DATABASE_URL
+    if db_url.startswith("postgresql://"):
+        db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-        if user:
-            user.full_name = full_name
-            user.hashed_password = hash_password(password)
-            user.role = UserRole.ADMIN
-            user.is_active = True
+    engine = create_async_engine(db_url, echo=False)
+    Session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-            await db.commit()
-            print(f"Usuario existente actualizado como ADMIN: {email}")
-            return
-
-        user = User(
-            email=email,
-            full_name=full_name,
-            hashed_password=hash_password(password),
-            role=UserRole.ADMIN,
-            is_active=True,
-        )
-
-        db.add(user)
-        await db.commit()
-
-        print(f"Admin creado correctamente: {email}")
+    async with Session() as session:
+        r = await session.execute(select(User).where(User.email == email))
+        existing = r.scalar_one_or_none()
+        if existing:
+            print(f"\n⚠️  Ya existe usuario con email: {email} (rol: {existing.role.value})")
+            ans = input("¿Cambiar rol a admin? (s/n): ").strip().lower()
+            if ans == "s":
+                existing.role = UserRole.ADMIN
+                existing.is_active = True
+                await session.commit()
+                print(f"✅ Rol actualizado a ADMIN para {email}")
+        else:
+            user = User(email=email, full_name=full_name,
+                        hashed_password=hash_password(password), role=UserRole.ADMIN, is_active=True)
+            session.add(user)
+            await session.commit()
+            print(f"\n✅ Admin creado: {email}")
+    await engine.dispose()
+    print("\nAhora inicia sesión en http://localhost:5173")
 
 
 if __name__ == "__main__":

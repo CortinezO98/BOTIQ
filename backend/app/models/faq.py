@@ -1,14 +1,11 @@
-"""Modelo FAQ."""
 from sqlalchemy import Column, String, Text, Boolean, DateTime, Integer
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from datetime import datetime, timezone
 import uuid
 from app.db.session import Base
 
-
 class FAQ(Base):
     __tablename__ = "faqs"
-
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     question = Column(Text, nullable=False)
     answer = Column(Text, nullable=False)

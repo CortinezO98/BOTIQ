@@ -1,7 +1,4 @@
-"""Fixtures globales de pytest para BOTIQ."""
-import pytest
-import asyncio
-
+import pytest, asyncio
 
 @pytest.fixture(scope="session")
 def event_loop():

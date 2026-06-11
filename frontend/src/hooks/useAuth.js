@@ -16,21 +16,18 @@ export function useAuth() {
       localStorage.setItem("botiq_user", JSON.stringify(data.user));
       setUser(data.user);
       return data.user;
-    } catch (err) {
-      const msg = err.response?.data?.detail || "Error al iniciar sesión";
+    } catch (e) {
+      const msg = e.response?.data?.detail || "Error al iniciar sesión";
       setError(msg); throw new Error(msg);
     } finally { setLoading(false); }
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem("botiq_token");
-    localStorage.removeItem("botiq_user");
+    localStorage.removeItem("botiq_token"); localStorage.removeItem("botiq_user");
     setUser(null);
   }, []);
 
-  return {
-    user, loading, error, login, logout,
+  return { user, loading, error, login, logout,
     isAdmin: user?.role === "admin",
-    isSupport: user?.role === "support_engineer" || user?.role === "admin",
-  };
+    isSupport: ["support_engineer","admin"].includes(user?.role) };
 }

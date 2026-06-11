@@ -1,22 +1,21 @@
-"""Módulo Employee Bot — FAQ + Gemini."""
 from typing import Optional, Dict, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
-
+from sqlalchemy import select
 from app.models.faq import FAQ
 from app.services.vertex.gemini_text_service import gemini_text_service
+from app.core.config import settings
 
-SYSTEM_PROMPT = """Eres BOTIQ, el asistente virtual corporativo.
+SYSTEM = """Eres BOTIQ, el asistente virtual corporativo de IQ.
 Ayudas a los empleados con:
 - Problemas de acceso a portales y sistemas internos
-- Errores en aplicaciones de oficina (Word, Excel, Outlook, etc.)
+- Errores en aplicaciones de oficina (Word, Excel, Outlook, Teams)
 - Procedimientos internos de TI
 - Soporte técnico básico
 
 Reglas:
-1. Responde siempre en español, de forma clara y concisa
+1. Responde siempre en español, claro y conciso
 2. Si tienes una FAQ relevante, úsala como base
-3. Si no puedes resolver el problema, indica que se escalará a Aranda
+3. Si no puedes resolver, indica que se escalará a Aranda
 4. Sé amable y profesional
 """
 
@@ -38,39 +37,27 @@ class EmployeeBotService:
             return {"question": best.question, "answer": best.answer, "category": best.category}
         return None
 
-    async def generate_response(
-        self,
-        user_message: str,
-        image_analysis: Optional[str] = None,
-        history: Optional[List[Dict]] = None,
-        faq_context: Optional[Dict] = None,
-        db: Optional[AsyncSession] = None,
-    ) -> Dict:
-        context_parts = []
+    async def generate_response(self, user_message: str, image_analysis: Optional[str] = None,
+                                history: Optional[List[Dict]] = None, faq_context: Optional[Dict] = None,
+                                db: Optional[AsyncSession] = None) -> Dict:
+        parts = []
         if faq_context:
-            context_parts.append(f"FAQ relacionada:\nP: {faq_context['question']}\nR: {faq_context['answer']}")
+            parts.append(f"FAQ relacionada:\nP: {faq_context['question']}\nR: {faq_context['answer']}")
         if image_analysis:
-            context_parts.append(f"Análisis de imagen: {image_analysis}")
-
-        context = "\n\n".join(context_parts)
+            parts.append(f"Análisis de imagen: {image_analysis}")
+        context = "\n\n".join(parts)
         prompt = f"{context}\n\nConsulta: {user_message}" if context else user_message
 
         result = await gemini_text_service.generate(
-            prompt=prompt,
-            system_instruction=SYSTEM_PROMPT,
-            history=history,
-            temperature=0.3,
+            prompt=prompt, system_instruction=SYSTEM, history=history, temperature=0.3,
+            model=settings.VERTEX_FAST_MODEL,
         )
-
-        escalate_keywords = ["no tengo información", "contacta a soporte", "crea un ticket", "aranda"]
-        escalated = any(kw in result["text"].lower() for kw in escalate_keywords)
-
+        escalate = any(kw in result["text"].lower() for kw in
+                       ["no tengo información", "contacta a soporte", "crea un ticket", "aranda"])
         return {
-            "text": result["text"],
-            "tokens_used": result.get("tokens_used"),
+            "text": result["text"], "tokens_used": result.get("tokens_used"),
             "response_time_ms": result.get("response_time_ms"),
-            "escalated_to_aranda": escalated,
-            "faq_used": faq_context is not None,
+            "escalated_to_aranda": escalate, "faq_used": faq_context is not None,
         }
 
 

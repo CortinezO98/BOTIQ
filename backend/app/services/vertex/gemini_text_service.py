@@ -1,20 +1,11 @@
-"""
-Servicio Gemini Pro para generación de texto via Vertex AI.
-Incluye fallback para modo demo (sin credenciales GCP).
-"""
-
 import time
 from typing import Optional, List, Dict
-
-from app.services.vertex.vertex_client import init_vertex_ai, is_vertex_available
+from app.services.vertex.vertex_client import is_vertex_available
 from app.core.config import settings
 
-# Intentar inicializar al importar
-init_vertex_ai()
-
-FALLBACK_RESPONSE = (
-    "Estoy en modo demo. Para habilitar respuestas reales con IA, "
-    "configura las credenciales de Google Cloud (Vertex AI) en el archivo .env."
+DEMO_RESPONSE = (
+    "Estoy en modo demo. Para activar respuestas con IA configura "
+    "GCP_PROJECT_ID y GOOGLE_APPLICATION_CREDENTIALS en el archivo .env."
 )
 
 
@@ -27,55 +18,30 @@ class GeminiTextService:
         history: Optional[List[Dict]] = None,
         temperature: float = 0.3,
         max_output_tokens: int = 1024,
+        model: Optional[str] = None,
     ) -> Dict:
-        start_time = time.time()
-
+        start = time.time()
         if not is_vertex_available():
-            return {
-                "text": FALLBACK_RESPONSE,
-                "tokens_used": 0,
-                "response_time_ms": (time.time() - start_time) * 1000,
-            }
-
+            return {"text": DEMO_RESPONSE, "tokens_used": 0, "response_time_ms": (time.time()-start)*1000}
         try:
             from vertexai.generative_models import GenerativeModel, GenerationConfig
-
-            model = GenerativeModel(
-                settings.VERTEX_GEMINI_MODEL,
-                system_instruction=system_instruction,
-            )
-            generation_config = GenerationConfig(
-                temperature=temperature,
-                max_output_tokens=max_output_tokens,
-            )
-
-            chat_history = []
+            m = model or settings.VERTEX_GEMINI_MODEL
+            gm = GenerativeModel(m, system_instruction=system_instruction)
+            cfg = GenerationConfig(temperature=temperature, max_output_tokens=max_output_tokens)
+            history_fmt = []
             if history:
-                for msg in history:
-                    chat_history.append({
-                        "role": msg["role"],
-                        "parts": [{"text": msg["content"]}],
-                    })
-
-            chat = model.start_chat(history=chat_history)
-            response = await chat.send_message_async(
-                prompt,
-                generation_config=generation_config,
-            )
-
+                for h in history:
+                    history_fmt.append({"role": h["role"], "parts": [{"text": h["content"]}]})
+            chat = gm.start_chat(history=history_fmt)
+            resp = await chat.send_message_async(prompt, generation_config=cfg)
             return {
-                "text": response.text,
-                "tokens_used": getattr(response.usage_metadata, "total_token_count", None),
-                "response_time_ms": (time.time() - start_time) * 1000,
+                "text": resp.text,
+                "tokens_used": getattr(resp.usage_metadata, "total_token_count", None),
+                "response_time_ms": (time.time()-start)*1000,
             }
-
         except Exception as e:
-            print(f"Error Gemini: {e}")
-            return {
-                "text": f"Error al procesar con IA: {str(e)}. Verifica la configuración de Vertex AI.",
-                "tokens_used": 0,
-                "response_time_ms": (time.time() - start_time) * 1000,
-            }
+            print(f"Gemini error: {e}")
+            return {"text": f"Error IA: {e}", "tokens_used": 0, "response_time_ms": (time.time()-start)*1000}
 
 
 gemini_text_service = GeminiTextService()

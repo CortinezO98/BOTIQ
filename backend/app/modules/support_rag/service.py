@@ -1,41 +1,27 @@
-"""
-Módulo RAG para Ingenieros de Soporte.
-MEJORAS:
-  - Umbral de confianza mínima (RAG_MIN_CONFIDENCE)
-  - Detecta knowledge_gap cuando la confianza es baja
-  - Integra Document AI para PDFs reales
-  - Metadata enriquecida por chunk
-"""
 from typing import Optional, Dict, List
 from app.core.config import settings
 from app.services.vertex.gemini_text_service import gemini_text_service
 from app.services.vertex.embeddings_service import embeddings_service
 from app.services.gdrive_service import gdrive_service
 
-RAG_MIN_CONFIDENCE: float = 0.72  # Umbral mínimo — si no se alcanza, es knowledge_gap
-
-SYSTEM_PROMPT = """Eres BOTIQ en modo Ingeniero de Soporte.
-Tienes acceso a la base de conocimiento técnica de la empresa.
-
-CONTEXTO RECUPERADO:
+RAG_SYSTEM = """Eres BOTIQ en modo Ingeniero de Soporte.
+Base de conocimiento disponible:
 {knowledge_context}
 
-INSTRUCCIONES:
-1. Responde usando ÚNICAMENTE el contexto anterior como base
-2. Cita las fuentes entre paréntesis al final de cada afirmación relevante
-3. Si el contexto no es suficiente, dilo explícitamente
-4. Proporciona pasos numerados para resolver problemas técnicos
-5. Responde en español con terminología técnica apropiada
-6. NUNCA inventes procedimientos que no estén en el contexto
+Instrucciones:
+1. Responde SOLO usando el contexto anterior
+2. Cita las fuentes entre paréntesis
+3. Si el contexto no es suficiente, indícalo
+4. Pasos numerados para problemas técnicos
+5. Responde en español
 """
 
-NO_KNOWLEDGE_RESPONSE = (
-    "No encontré información suficiente en la base de conocimiento para darte "
-    "una respuesta confiable sobre este tema. "
-    "Te recomiendo:\n"
-    "1. Documentar este caso para enriquecer la base de conocimiento\n"
-    "2. Escalarlo a un especialista\n"
-    "3. Consultar la documentación oficial del proveedor"
+NO_KNOWLEDGE = (
+    "No encontré información suficiente en la base de conocimiento (confianza insuficiente).\n"
+    "Recomiendo:\n"
+    "1. Agregar documentación sobre este tema a la carpeta de Google Drive\n"
+    "2. Ejecutar /support/sync-knowledge-base para actualizar el índice\n"
+    "3. Escalar el caso a un especialista"
 )
 
 
@@ -47,10 +33,7 @@ class SupportRAGService:
     def _get_collection(self):
         if self._collection is None:
             import chromadb
-            client = chromadb.HttpClient(
-                host=settings.CHROMA_HOST,
-                port=settings.CHROMA_PORT,
-            )
+            client = chromadb.HttpClient(host=settings.CHROMA_HOST, port=settings.CHROMA_PORT)
             self._collection = client.get_or_create_collection(
                 name=settings.CHROMA_COLLECTION_NAME,
                 metadata={"hnsw:space": "cosine"},
@@ -58,18 +41,22 @@ class SupportRAGService:
         return self._collection
 
     async def sync_knowledge_base(self) -> Dict:
-        """
-        Sincroniza desde Google Drive.
-        - Google Docs / TXT → texto directo
-        - PDFs → Document AI para extracción precisa
-        """
+        """Sincroniza documentos desde Google Drive a ChromaDB."""
         from app.services.vertex.document_ai_service import document_ai_service
+
+        if not gdrive_service.is_configured():
+            return {
+                "status": "error",
+                "message": "Google Drive no configurado. Verifica GDRIVE_FOLDER_ID y service-account.json",
+                "documents_processed": 0,
+            }
 
         documents = await gdrive_service.get_all_documents_content_with_type()
         if not documents:
             return {
+                "status": "empty",
+                "message": "No se encontraron documentos en la carpeta de Google Drive",
                 "documents_processed": 0,
-                "message": "Google Drive no configurado o carpeta vacía",
             }
 
         collection = self._get_collection()
@@ -77,16 +64,16 @@ class SupportRAGService:
 
         for doc in documents:
             try:
-                # Si es PDF → usar Document AI para extracción real
-                if doc.get("mime_type") == "application/pdf" and doc.get("bytes"):
+                # PDFs → Document AI para extracción precisa
+                if doc.get("doc_type") == "pdf" and doc.get("bytes"):
                     text = await document_ai_service.process_pdf(doc["bytes"])
                     if not text:
-                        # Fallback al texto básico si Document AI no está configurado
                         text = doc.get("content", "")
                 else:
                     text = doc.get("content", "")
 
                 if not text.strip():
+                    print(f"⚠️  {doc['name']}: sin contenido extraíble")
                     continue
 
                 chunks = self._chunk_text(text)
@@ -100,130 +87,84 @@ class SupportRAGService:
                         metadatas=[{
                             "file_id": doc["file_id"],
                             "file_name": doc["name"],
-                            "mime_type": doc.get("mime_type", ""),
+                            "doc_type": doc.get("doc_type", ""),
                             "modified_at": doc.get("modified_at", ""),
                             "chunk_index": i,
                             "total_chunks": len(chunks),
-                            "content_hash": str(hash(chunk)),
                         }],
                     )
+                print(f"✅ {doc['name']}: {len(chunks)} chunks indexados")
                 added += 1
             except Exception as e:
-                print(f"Error procesando {doc.get('name')}: {e}")
+                print(f"❌ Error procesando {doc.get('name')}: {e}")
                 errors += 1
 
         return {
+            "status": "success",
             "documents_processed": len(documents),
             "documents_added": added,
             "errors": errors,
+            "total_chunks": self._get_collection().count(),
         }
 
-    async def retrieve_context(self, query: str, top_k: int = 5) -> List[Dict]:
-        """Recupera chunks más relevantes con score de confianza."""
+    async def retrieve_context(self, query: str, top_k: int = None) -> List[Dict]:
+        top_k = top_k or settings.RAG_TOP_K
         try:
             collection = self._get_collection()
             if collection.count() == 0:
                 return []
-
-            query_embedding = await embeddings_service.embed_text(query)
-            n = min(top_k, collection.count())
-
+            emb = await embeddings_service.embed_text(query)
             results = collection.query(
-                query_embeddings=[query_embedding],
-                n_results=n,
+                query_embeddings=[emb],
+                n_results=min(top_k, collection.count()),
                 include=["documents", "metadatas", "distances"],
             )
-
             chunks = []
             if results["documents"] and results["documents"][0]:
-                for doc, meta, dist in zip(
-                    results["documents"][0],
-                    results["metadatas"][0],
-                    results["distances"][0],
-                ):
-                    relevance = max(0.0, 1 - dist)
+                for doc, meta, dist in zip(results["documents"][0], results["metadatas"][0], results["distances"][0]):
                     chunks.append({
                         "content": doc,
                         "source": meta.get("file_name", "Desconocido"),
-                        "file_id": meta.get("file_id", ""),
-                        "relevance_score": relevance,
-                        "chunk_index": meta.get("chunk_index", 0),
+                        "relevance_score": max(0.0, 1 - dist),
                     })
-
-            # Ordenar por relevancia descendente
             chunks.sort(key=lambda x: x["relevance_score"], reverse=True)
             return chunks
-
         except Exception as e:
-            print(f"ChromaDB retrieve error: {e}")
+            print(f"ChromaDB error: {e}")
             return []
 
-    async def generate_response(
-        self,
-        user_message: str,
-        image_analysis: Optional[str] = None,
-        history: Optional[List[Dict]] = None,
-    ) -> Dict:
-        """
-        Genera respuesta con RAG.
-        Si la confianza es < RAG_MIN_CONFIDENCE → retorna knowledge_gap=True
-        """
-        augmented = (
-            f"{user_message}\nContexto visual: {image_analysis}"
-            if image_analysis else user_message
-        )
+    async def generate_response(self, user_message: str, image_analysis: Optional[str] = None,
+                                history: Optional[List[Dict]] = None) -> Dict:
+        q = f"{user_message}\nContexto visual: {image_analysis}" if image_analysis else user_message
+        chunks = await self.retrieve_context(q)
+        avg_conf = sum(c["relevance_score"] for c in chunks) / len(chunks) if chunks else 0.0
 
-        context_chunks = await self.retrieve_context(augmented)
-
-        # Calcular confianza promedio de los chunks recuperados
-        avg_confidence = 0.0
-        if context_chunks:
-            avg_confidence = sum(c["relevance_score"] for c in context_chunks) / len(context_chunks)
-
-        # ── Umbral de confianza ──────────────────────────────────────────────
-        if not context_chunks or avg_confidence < RAG_MIN_CONFIDENCE:
+        if not chunks or avg_conf < settings.RAG_MIN_CONFIDENCE:
             return {
-                "text": NO_KNOWLEDGE_RESPONSE,
-                "sources": [],
-                "avg_confidence": avg_confidence,
-                "knowledge_gap": True,
-                "tokens_used": 0,
-                "response_time_ms": 0,
+                "text": NO_KNOWLEDGE, "sources": [], "avg_confidence": avg_conf,
+                "knowledge_gap": True, "tokens_used": 0, "response_time_ms": 0,
             }
 
-        # Construir contexto para el prompt
-        knowledge_context = "\n\n---\n\n".join([
-            f"[Fuente: {c['source']}]\n{c['content']}"
-            for c in context_chunks
-        ])
-
+        context = "\n\n---\n\n".join([f"[Fuente: {c['source']}]\n{c['content']}" for c in chunks])
         result = await gemini_text_service.generate(
-            prompt=augmented,
-            system_instruction=SYSTEM_PROMPT.format(knowledge_context=knowledge_context),
+            prompt=q,
+            system_instruction=RAG_SYSTEM.format(knowledge_context=context),
             history=history,
             temperature=0.2,
+            model=settings.VERTEX_REASONING_MODEL,
         )
-
-        sources = list({c["source"] for c in context_chunks})
-
         return {
             "text": result["text"],
             "tokens_used": result.get("tokens_used"),
             "response_time_ms": result.get("response_time_ms"),
-            "sources": sources,
-            "avg_confidence": avg_confidence,
-            "context_chunks_used": len(context_chunks),
+            "sources": list({c["source"] for c in chunks}),
+            "avg_confidence": avg_conf,
             "knowledge_gap": False,
         }
 
     def _chunk_text(self, text: str, chunk_size: int = 500) -> List[str]:
-        """Chunking semántico básico por palabras."""
         words = text.split()
-        return [
-            " ".join(words[i:i + chunk_size])
-            for i in range(0, len(words), chunk_size)
-            if words[i:i + chunk_size]
-        ]
+        return [" ".join(words[i:i+chunk_size]) for i in range(0, len(words), chunk_size) if words[i:i+chunk_size]]
 
 
 support_rag_service = SupportRAGService()

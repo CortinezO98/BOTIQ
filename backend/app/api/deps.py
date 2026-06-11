@@ -1,9 +1,7 @@
-"""Dependencias reutilizables FastAPI — autenticación y roles."""
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-
 from app.core.security import decode_token
 from app.core.roles import UserRole, has_minimum_role
 from app.db.session import get_db
@@ -16,9 +14,9 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    token_data = decode_token(token)
+    data = decode_token(token)
     result = await db.execute(
-        select(User).where(User.id == token_data["user_id"], User.is_active == True)
+        select(User).where(User.id == data["user_id"], User.is_active == True)
     )
     user = result.scalar_one_or_none()
     if not user:
@@ -38,5 +36,5 @@ def require_role(minimum_role: UserRole):
 
 
 require_employee = require_role(UserRole.EMPLOYEE)
-require_support   = require_role(UserRole.SUPPORT_ENGINEER)
-require_admin     = require_role(UserRole.ADMIN)
+require_support = require_role(UserRole.SUPPORT_ENGINEER)
+require_admin = require_role(UserRole.ADMIN)

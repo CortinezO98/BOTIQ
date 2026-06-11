@@ -1,4 +1,3 @@
-"""Rutas del módulo de servidores."""
 from fastapi import APIRouter, Depends
 from app.api.deps import require_support
 from app.models.user import User

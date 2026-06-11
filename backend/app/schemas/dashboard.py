@@ -1,8 +1,6 @@
-"""Schemas del dashboard de métricas — versión completa."""
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-
 
 class DashboardMetrics(BaseModel):
     total_conversations: int
@@ -14,7 +12,6 @@ class DashboardMetrics(BaseModel):
     period_start: datetime
     period_end: datetime
 
-
 class MetricsSummary(BaseModel):
     today_conversations: int
     week_conversations: int
@@ -22,27 +19,22 @@ class MetricsSummary(BaseModel):
     support_gap_count: int
     most_reported_server: Optional[str] = None
 
-
 class ConvByModule(BaseModel):
     module: str
     count: int
 
-
 class ConvByDay(BaseModel):
     date: str
     count: int
-
 
 class TopFAQ(BaseModel):
     question: str
     hits: int
     category: str
 
-
 class TokenConsumption(BaseModel):
     date: str
     tokens: int
-
 
 class KnowledgeGapItem(BaseModel):
     id: str
@@ -52,7 +44,6 @@ class KnowledgeGapItem(BaseModel):
     avg_confidence: float
     last_seen: datetime
     status: str
-
 
 class EscalationRate(BaseModel):
     total: int

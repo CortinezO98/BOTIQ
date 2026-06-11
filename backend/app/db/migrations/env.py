@@ -1,4 +1,3 @@
-"""Alembic env.py — incluye todos los modelos nuevos."""
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
@@ -8,21 +7,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from app.core.config import settings
 from app.db.session import Base
-
-# Importar TODOS los modelos para que Alembic los detecte
-from app.models.user import User                          # noqa
-from app.models.conversation import Conversation, Message # noqa
-from app.models.faq import FAQ                            # noqa
-from app.models.server_log import ServerLog               # noqa
-from app.models.knowledge_gap import KnowledgeGap         # noqa
-from app.models.audit_log import AuditLog                 # noqa
+from app.models.user import User               # noqa
+from app.models.conversation import Conversation, Message  # noqa
+from app.models.faq import FAQ                 # noqa
+from app.models.server_log import ServerLog    # noqa
+from app.models.knowledge_gap import KnowledgeGap  # noqa
+from app.models.audit_log import AuditLog      # noqa
 
 config = context.config
 
-sync_url = settings.DATABASE_URL
-for old, new in [("+asyncpg", ""), ("postgresql+psycopg2", "postgresql")]:
-    sync_url = sync_url.replace(old, new)
-
+sync_url = settings.DATABASE_URL.replace("+asyncpg", "")
 config.set_main_option("sqlalchemy.url", sync_url)
 
 if config.config_file_name:
@@ -32,9 +26,8 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline():
-    context.configure(url=config.get_main_option("sqlalchemy.url"),
-                      target_metadata=target_metadata, literal_binds=True,
-                      dialect_opts={"paramstyle": "named"})
+    context.configure(url=sync_url, target_metadata=target_metadata,
+                      literal_binds=True, dialect_opts={"paramstyle": "named"})
     with context.begin_transaction():
         context.run_migrations()
 

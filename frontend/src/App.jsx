@@ -4,13 +4,10 @@ import ChatPage from "./pages/ChatPage";
 import DashboardPage from "./pages/DashboardPage";
 
 function getUser() {
-  try {
-    const u = localStorage.getItem("botiq_user");
-    return u ? JSON.parse(u) : null;
-  } catch { return null; }
+  try { return JSON.parse(localStorage.getItem("botiq_user")); } catch { return null; }
 }
 
-function ProtectedRoute({ children, adminOnly = false }) {
+function Guard({ children, adminOnly = false }) {
   const user = getUser();
   if (!user) return <Navigate to="/login" replace />;
   if (adminOnly && user.role !== "admin") return <Navigate to="/chat" replace />;
@@ -22,8 +19,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
-        <Route path="/dashboard" element={<ProtectedRoute adminOnly><DashboardPage /></ProtectedRoute>} />
+        <Route path="/chat" element={<Guard><ChatPage /></Guard>} />
+        <Route path="/dashboard" element={<Guard adminOnly><DashboardPage /></Guard>} />
         <Route path="*" element={<Navigate to="/chat" replace />} />
       </Routes>
     </BrowserRouter>
