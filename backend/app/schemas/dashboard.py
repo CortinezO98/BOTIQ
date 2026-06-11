@@ -1,29 +1,7 @@
-"""Schemas para el dashboard."""
+"""Schemas del dashboard de métricas — versión completa."""
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional
 from datetime import datetime
-
-
-class FrequentQuery(BaseModel):
-    query: str
-    count: int
-    module: str
-    last_seen: datetime
-
-
-class ServerMetric(BaseModel):
-    server_name: str
-    downtime_count: int
-    avg_memory: Optional[float] = None
-    avg_cpu: Optional[float] = None
-    last_incident: Optional[datetime] = None
-
-
-class SupportGap(BaseModel):
-    query: str
-    frequency: int
-    avg_confidence: float
-    suggested_action: str
 
 
 class DashboardMetrics(BaseModel):
@@ -32,9 +10,7 @@ class DashboardMetrics(BaseModel):
     avg_response_time_ms: float
     total_tokens_used: float
     escalations_to_aranda: int
-    most_frequent_queries: List[FrequentQuery] = []
-    server_metrics: List[ServerMetric] = []
-    support_gaps: List[SupportGap] = []
+    open_knowledge_gaps: int
     period_start: datetime
     period_end: datetime
 
@@ -43,5 +19,42 @@ class MetricsSummary(BaseModel):
     today_conversations: int
     week_conversations: int
     top_module: str
-    most_reported_server: Optional[str] = None
     support_gap_count: int
+    most_reported_server: Optional[str] = None
+
+
+class ConvByModule(BaseModel):
+    module: str
+    count: int
+
+
+class ConvByDay(BaseModel):
+    date: str
+    count: int
+
+
+class TopFAQ(BaseModel):
+    question: str
+    hits: int
+    category: str
+
+
+class TokenConsumption(BaseModel):
+    date: str
+    tokens: int
+
+
+class KnowledgeGapItem(BaseModel):
+    id: str
+    query: str
+    module: str
+    frequency: int
+    avg_confidence: float
+    last_seen: datetime
+    status: str
+
+
+class EscalationRate(BaseModel):
+    total: int
+    escalated: int
+    rate_pct: float

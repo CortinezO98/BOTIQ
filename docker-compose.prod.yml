@@ -1,0 +1,111 @@
+version: "3.9"
+# PRODUCCIÓN: docker-compose -f docker-compose.prod.yml up -d
+
+services:
+
+  db:
+    image: postgres:15-alpine
+    container_name: botiq_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # ← Sin puerto expuesto en producción
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - botiq_internal
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: botiq_chromadb
+    # ← Sin puerto expuesto en producción
+    volumes:
+      - chroma_data:/chroma/chroma
+    restart: always
+    networks:
+      - botiq_internal
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: alembic upgrade head
+    env_file:
+      - ./backend/.env.prod
+    environment:
+      - ENVIRONMENT=production
+    volumes:
+      - ./backend/credentials:/app/credentials:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - botiq_internal
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: botiq_backend
+    # Gunicorn + Uvicorn workers para producción
+    command: gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:8000 --timeout 60
+    # ← Sin puerto expuesto — solo accesible via nginx
+    env_file:
+      - ./backend/.env.prod
+    environment:
+      - ENVIRONMENT=production
+    volumes:
+      - ./backend/credentials:/app/credentials:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+    restart: always
+    networks:
+      - botiq_internal
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: botiq_frontend
+    # ← Sin puerto expuesto — solo accesible via nginx
+    restart: always
+    networks:
+      - botiq_internal
+
+  nginx:
+    image: nginx:alpine
+    container_name: botiq_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - backend
+      - frontend
+    restart: always
+    networks:
+      - botiq_internal
+      - botiq_public
+
+volumes:
+  postgres_data:
+  chroma_data:
+
+networks:
+  botiq_internal:
+    driver: bridge
+    internal: true   # Sin acceso externo directo
+  botiq_public:
+    driver: bridge

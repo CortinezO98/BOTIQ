@@ -1,4 +1,4 @@
-"""Schemas para el chat."""
+"""Schemas para el chat BOTIQ."""
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -7,6 +7,7 @@ from app.models.conversation import ModuleType
 
 
 class ChatMessageRequest(BaseModel):
+    """Para el endpoint /message/json (compatibilidad base64)."""
     message: str
     session_id: Optional[str] = None
     image_base64: Optional[str] = None
@@ -22,3 +23,4 @@ class ChatMessageResponse(BaseModel):
     has_image_analysis: bool = False
     escalated_to_aranda: bool = False
     sources: Optional[List[str]] = None
+    knowledge_gap: bool = False
