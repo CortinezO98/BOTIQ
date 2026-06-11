@@ -1,0 +1,78 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: botiq_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://botiq_user:botiq_pass@db:5432/botiq_db
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+      - ./backend/credentials:/app/credentials:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - botiq_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: botiq_frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - botiq_network
+
+  db:
+    image: postgres:15-alpine
+    container_name: botiq_db
+    environment:
+      POSTGRES_USER: botiq_user
+      POSTGRES_PASSWORD: botiq_pass
+      POSTGRES_DB: botiq_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U botiq_user -d botiq_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - botiq_network
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: botiq_chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    restart: unless-stopped
+    networks:
+      - botiq_network
+
+volumes:
+  postgres_data:
+  chroma_data:
+
+networks:
+  botiq_network:
+    driver: bridge
