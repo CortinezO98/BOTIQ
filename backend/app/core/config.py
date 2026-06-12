@@ -5,7 +5,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     APP_NAME: str = "BOTIQ"
-    APP_VERSION: str = "1.1.0"
+    APP_VERSION: str = "1.2.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
@@ -41,7 +41,6 @@ class Settings(BaseSettings):
     DOCUMENT_AI_LOCATION: str = "us"
 
     GDRIVE_FOLDER_ID: str = ""
-
     GCS_BUCKET_NAME: str = "botiq-images-bucket"
 
     SERVER_DASHBOARD_API_URL: str = ""
@@ -51,10 +50,37 @@ class Settings(BaseSettings):
     CHROMA_PORT: int = 8000
     CHROMA_COLLECTION_NAME: str = "botiq_knowledge_base"
 
-    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:5180,http://localhost:5190,http://localhost:3000"
+
+    MAX_QUESTIONS_PER_SESSION: int = 8
+    MAX_OUT_OF_SCOPE_PER_SESSION: int = 1
+    MAX_MESSAGE_LENGTH: int = 1200
+    REQUIRE_SUPPORT_NETWORK_VALIDATION: bool = True
+    SUPPORT_ALLOWED_EMAIL_DOMAINS: str = "iq-online.com"
+
+    BUSINESS_SCOPE_KEYWORDS: str = (
+        "portal,sistema,aplicacion,aplicación,correo,outlook,excel,word,teams,"
+        "vpn,contraseña,password,login,acceso,servidor,server,base de conocimiento,"
+        "documentación,documentacion,procedimiento,incidente,soporte,aranda,"
+        "red,firewall,certificado,ssl,backup,memoria,cpu,disco,latencia"
+    )
+    OUT_OF_SCOPE_KEYWORDS: str = (
+        "chiste,novia,novio,apuesta,casino,política,politica,religión,religion,"
+        "sexo,droga,drogas,futbol,fútbol,receta,cocina,pelicula,película,"
+        "tarea escolar,poema,cancion,canción,instagram,tiktok"
+    )
 
     def get_allowed_origins(self) -> List[str]:
         return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+
+    def get_support_allowed_domains(self) -> List[str]:
+        return [d.strip().lower() for d in self.SUPPORT_ALLOWED_EMAIL_DOMAINS.split(",") if d.strip()]
+
+    def get_business_keywords(self) -> List[str]:
+        return [k.strip().lower() for k in self.BUSINESS_SCOPE_KEYWORDS.split(",") if k.strip()]
+
+    def get_out_of_scope_keywords(self) -> List[str]:
+        return [k.strip().lower() for k in self.OUT_OF_SCOPE_KEYWORDS.split(",") if k.strip()]
 
     class Config:
         env_file = ".env"

@@ -7,15 +7,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from app.core.config import settings
 from app.db.session import Base
-from app.models.user import User               # noqa
-from app.models.conversation import Conversation, Message  # noqa
-from app.models.faq import FAQ                 # noqa
-from app.models.server_log import ServerLog    # noqa
-from app.models.knowledge_gap import KnowledgeGap  # noqa
-from app.models.audit_log import AuditLog      # noqa
+from app.models.user import User
+from app.models.conversation import Conversation, Message
+from app.models.faq import FAQ
+from app.models.server_log import ServerLog
+from app.models.knowledge_gap import KnowledgeGap
+from app.models.audit_log import AuditLog
+from app.models.network_user import NetworkUser
 
 config = context.config
-
 sync_url = settings.DATABASE_URL.replace("+asyncpg", "")
 config.set_main_option("sqlalchemy.url", sync_url)
 
@@ -26,8 +26,13 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline():
-    context.configure(url=sync_url, target_metadata=target_metadata,
-                      literal_binds=True, dialect_opts={"paramstyle": "named"})
+    context.configure(
+        url=sync_url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+        compare_type=True,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
@@ -35,10 +40,11 @@ def run_migrations_offline():
 def run_migrations_online():
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.", poolclass=pool.NullPool,
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
         with context.begin_transaction():
             context.run_migrations()
 

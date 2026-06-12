@@ -1,0 +1,38 @@
+Archivos completos incluidos para reemplazar/agregar en BOTIQ
+
+BACKEND
+backend/.env.example
+backend/.env.prod.example
+backend/init_db.py
+backend/app/core/config.py
+backend/app/models/conversation.py
+backend/app/models/network_user.py
+backend/app/db/migrations/env.py
+backend/app/db/migrations/versions/20260611_0001_add_chat_controls.py
+backend/app/schemas/chat.py
+backend/app/schemas/network_user.py
+backend/app/services/audit_service.py
+backend/app/services/chat_guard_service.py
+backend/app/api/v1/__init__.py
+backend/app/api/v1/routes/admin.py
+backend/app/api/v1/routes/chat.py
+
+FRONTEND
+frontend/src/services/api.js
+frontend/src/hooks/useChat.js
+frontend/src/components/ChatHistory/index.jsx
+frontend/src/components/ChatWidget/index.jsx
+frontend/src/pages/ChatPage.jsx
+frontend/src/pages/ConversationLogsPage.jsx
+frontend/src/App.jsx
+frontend/src/components/Layout/Navbar.jsx
+
+MEJORAS IMPLEMENTADAS
+- Log/historial de conversaciones por usuario.
+- Endpoint admin para revisar logs de conversaciones.
+- Flujo inicial: Empleado o Ingeniero de Soporte.
+- Validación de usuario de red para soporte.
+- Límites de preguntas por sesión.
+- Cierre de sesión ante temas ajenos al negocio.
+- Auditoría de eventos principales.
+- Variables de configuración para controlar consumo de IA.

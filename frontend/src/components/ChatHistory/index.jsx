@@ -1,0 +1,71 @@
+import { useEffect, useState } from "react";
+import { chatAPI } from "../../services/api";
+
+const C = "#272163";
+
+export default function ChatHistory({ onSelect }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const { data } = await chatAPI.conversations();
+      setItems(data);
+    } catch {
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  return (
+    <aside style={{ width: 285, background: "#fff", borderRight: "1px solid #e2e1f0", minHeight: "calc(100vh - 58px)", padding: 16, overflowY: "auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <h3 style={{ color: C, fontSize: 14, margin: 0 }}>Historial</h3>
+        <button onClick={load} style={smallBtn}>↻</button>
+      </div>
+
+      {loading ? (
+        <p style={muted}>Cargando...</p>
+      ) : items.length === 0 ? (
+        <p style={muted}>No tienes conversaciones registradas.</p>
+      ) : (
+        <div style={{ display: "grid", gap: 9 }}>
+          {items.map((c) => (
+            <button key={c.id} onClick={() => onSelect?.(c)} style={itemBtn}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ color: C, fontSize: 12, fontWeight: 800 }}>
+                  {c.selected_profile === "support_engineer" ? "Soporte" : "Empleado"}
+                </span>
+                <span style={{ fontSize: 10, color: c.session_status === "active" ? "#059669" : c.session_status === "blocked" ? "#dc2626" : "#6b6b8a", fontWeight: 700 }}>
+                  {c.session_status || "active"}
+                </span>
+              </div>
+              <div style={{ color: "#6b6b8a", fontSize: 11, marginTop: 6 }}>
+                {new Date(c.created_at).toLocaleString()}
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                <Tag>{c.question_count || 0} preguntas</Tag>
+                {c.out_of_scope_count > 0 && <Tag danger>{c.out_of_scope_count} fuera alcance</Tag>}
+                {c.support_network_validated && <Tag>red ok</Tag>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </aside>
+  );
+}
+
+function Tag({ children, danger = false }) {
+  return <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 999, background: danger ? "#fef2f2" : "#f5f5fa", color: danger ? "#991b1b" : C, border: `1px solid ${danger ? "#fecaca" : "#e2e1f0"}`, fontWeight: 700 }}>{children}</span>;
+}
+
+const muted = { color: "#6b6b8a", fontSize: 12, lineHeight: 1.5 };
+const smallBtn = { border: "1px solid #e2e1f0", background: "#f5f5fa", color: C, width: 28, height: 28, borderRadius: 8, cursor: "pointer" };
+const itemBtn = { textAlign: "left", border: "1px solid #e2e1f0", background: "#fdfdff", borderRadius: 12, padding: 11, cursor: "pointer" };
