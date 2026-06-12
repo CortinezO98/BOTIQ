@@ -3,7 +3,7 @@ import Navbar from "../components/Layout/Navbar";
 
 export default function DashboardPage() {
   return (
-    <div style={{ minHeight: "100vh" }}>
+    <div className="botiq-page-shell">
       <Navbar currentPage="dashboard" />
       <Dashboard />
     </div>

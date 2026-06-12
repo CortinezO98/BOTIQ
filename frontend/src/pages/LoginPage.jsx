@@ -18,13 +18,14 @@ export default function LoginPage() {
     e.preventDefault();
 
     try {
-      const user = await login(email, pass);
+      const user = await login(email.trim(), pass);
       nav(user.role === "admin" ? "/dashboard" : "/chat");
     } catch {}
   };
 
   return (
     <div
+      className="botiq-login-page-inline"
       style={{
         minHeight: "100vh",
         background:
@@ -37,6 +38,7 @@ export default function LoginPage() {
       }}
     >
       <div
+        className="animate__animated animate__fadeIn animate__slow"
         style={{
           position: "absolute",
           width: 360,
@@ -50,6 +52,7 @@ export default function LoginPage() {
       />
 
       <div
+        className="animate__animated animate__fadeInUp animate__slow"
         style={{
           position: "absolute",
           width: 240,
@@ -62,6 +65,7 @@ export default function LoginPage() {
       />
 
       <div
+        className="botiq-login-grid-inline"
         style={{
           width: "100%",
           maxWidth: 980,
@@ -73,7 +77,10 @@ export default function LoginPage() {
           zIndex: 1,
         }}
       >
-        <section style={{ color: "#fff", padding: "20px 8px" }}>
+        <section
+          className="botiq-login-hero-inline animate__animated animate__fadeInLeft"
+          style={{ color: "#fff", padding: "20px 8px" }}
+        >
           <BotiqLogo variant="light" size="lg" showSubtitle />
 
           <h1
@@ -103,12 +110,8 @@ export default function LoginPage() {
           </p>
 
           <div
-            style={{
-              marginTop: 28,
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-            }}
+            className="botiq-login-pills-inline"
+            style={{ marginTop: 28, display: "flex", flexWrap: "wrap", gap: 10 }}
           >
             <Pill>💬 Chat interno</Pill>
             <Pill>📚 RAG corporativo</Pill>
@@ -118,6 +121,7 @@ export default function LoginPage() {
         </section>
 
         <section
+          className={`botiq-login-card-inline animate__animated ${error ? "animate__shakeX" : "animate__fadeInRight"}`}
           style={{
             background: "rgba(255,255,255,0.96)",
             border: "1px solid rgba(255,255,255,0.35)",
@@ -132,15 +136,7 @@ export default function LoginPage() {
               <BotiqAvatar size={72} online />
             </div>
 
-            <h2
-              style={{
-                margin: 0,
-                color: C,
-                fontSize: 25,
-                fontWeight: 850,
-                letterSpacing: "-0.6px",
-              }}
-            >
+            <h2 style={{ margin: 0, color: C, fontSize: 25, fontWeight: 850, letterSpacing: "-0.6px" }}>
               Iniciar sesión
             </h2>
 
@@ -157,6 +153,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
                 placeholder="usuario@empresa.com"
                 style={inputStyle}
                 onFocus={focusInput}
@@ -172,6 +169,7 @@ export default function LoginPage() {
                   value={pass}
                   onChange={(e) => setPass(e.target.value)}
                   required
+                  autoComplete="current-password"
                   placeholder="Tu contraseña"
                   style={{ ...inputStyle, paddingRight: 48 }}
                   onFocus={focusInput}
@@ -201,6 +199,7 @@ export default function LoginPage() {
 
             {error && (
               <div
+                className="animate__animated animate__shakeX"
                 style={{
                   background: "#fef2f2",
                   border: "1px solid #fecaca",
@@ -223,9 +222,7 @@ export default function LoginPage() {
                 border: "none",
                 borderRadius: 12,
                 padding: "13px 16px",
-                background: loading
-                  ? "#9ca3af"
-                  : `linear-gradient(135deg, ${C}, ${CL})`,
+                background: loading ? "#9ca3af" : `linear-gradient(135deg, ${C}, ${CL})`,
                 color: "#fff",
                 fontWeight: 750,
                 fontSize: 15,
@@ -238,15 +235,8 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p
-            style={{
-              textAlign: "center",
-              color: "#9ca3af",
-              fontSize: 11,
-              marginTop: 24,
-            }}
-          >
-            IQ Corporation · Vertex AI · ChromaDB · React · FastAPI
+          <p style={{ textAlign: "center", color: "#9ca3af", fontSize: 11, marginTop: 24 }}>
+            IQ Corporation · Powered by Vertex AI
           </p>
         </section>
       </div>
@@ -272,13 +262,7 @@ function Pill({ children }) {
   );
 }
 
-const labelStyle = {
-  display: "block",
-  color: "#374151",
-  fontSize: 12,
-  fontWeight: 700,
-  marginBottom: 7,
-};
+const labelStyle = { display: "block", color: "#374151", fontSize: 12, fontWeight: 700, marginBottom: 7 };
 
 const inputStyle = {
   width: "100%",

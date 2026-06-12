@@ -24,7 +24,7 @@ export default function ChatHistory({ onSelect }) {
   }, []);
 
   return (
-    <aside style={{ width: 295, background: "#fff", borderRight: "1px solid #e2e1f0", minHeight: "calc(100vh - 58px)", padding: 16, overflowY: "auto" }}>
+    <aside className="botiq-chat-history" style={{ background: "#fff", borderRight: "1px solid #e2e1f0", minHeight: "calc(100vh - 58px)", padding: 16, overflowY: "auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <h3 style={{ color: C, fontSize: 14, margin: 0 }}>Historial</h3>
         <button onClick={load} style={smallBtn}>↻</button>

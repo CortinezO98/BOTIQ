@@ -129,6 +129,7 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
 
   const content = (
     <div
+      className={embedded ? "botiq-chat-panel botiq-chat-panel--embedded" : "botiq-chat-panel animate__animated animate__fadeInUp"}
       style={{
         width: embedded ? "100%" : 420,
         height: embedded ? "calc(100vh - 58px)" : 660,
@@ -156,16 +157,7 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
         </div>
       )}
 
-      <div
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: "14px 16px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
+      <div className="botiq-chat-content">
         {!session && (
           <ProfileSelector
             selectedProfile={selectedProfile}
@@ -234,12 +226,12 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
   if (embedded) return content;
 
   return (
-    <div style={{ position: "fixed", zIndex: 9999, ...pos }}>
+    <div className="botiq-chat-fixed" style={{ ...pos }}>
       {open && content}
 
       <button
         onClick={() => setOpen((value) => !value)}
-        style={floatBtn(primaryColor)}
+        className="botiq-chat-float-button" style={floatBtn(primaryColor)}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = "scale(1.08)";
           e.currentTarget.style.boxShadow = `0 7px 30px ${primaryColor}75`;
@@ -311,7 +303,7 @@ function ProfileSelector({
         Indícame tu perfil para configurar el flujo conversacional, las fuentes de conocimiento y los controles de uso de IA.
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      <div className="botiq-profile-options">
         <button disabled={loading} onClick={() => configureProfile("employee")} style={profileBtn(primaryColor, selectedProfile === "employee")}>
           👤<br />Empleado
           <span style={profileSub}>FAQs, aplicativos, URLs</span>
@@ -424,6 +416,7 @@ function Bubble({ msg, primaryColor }) {
 
       <div style={{ maxWidth: "78%" }}>
         <div
+          className="botiq-chat-bubble-text"
           style={{
             background: isUser ? `linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd)` : msg.meta?.isError ? "#fef2f2" : msg.meta?.system ? "#eef2ff" : "#f5f5fa",
             color: isUser ? "#fff" : msg.meta?.isError ? "#dc2626" : "#1a1a2e",

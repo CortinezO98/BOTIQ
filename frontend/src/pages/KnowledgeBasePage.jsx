@@ -44,10 +44,10 @@ export default function KnowledgeBasePage() {
   }, []);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f5f5fa" }}>
+    <div className="botiq-page botiq-admin-page">
       <Navbar currentPage="knowledge-base" />
 
-      <main style={{ padding: "28px 32px" }}>
+      <main className="botiq-page-main">
         <header style={{ marginBottom: 24 }}>
           <h1 style={{ color: C, fontSize: 24, margin: 0 }}>Base de conocimiento</h1>
           <p style={{ color: "#6b6b8a", marginTop: 6, fontSize: 13 }}>

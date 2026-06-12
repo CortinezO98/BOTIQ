@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
 import Navbar from "../components/Layout/Navbar";
 import { chatAPI } from "../services/api";
 
@@ -11,6 +12,14 @@ export default function ConversationLogsPage() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const stats = useMemo(() => {
+    const total = logs.length;
+    const active = logs.filter((item) => item.session_status === "active").length;
+    const blocked = logs.filter((item) => item.session_status === "blocked").length;
+    const tickets = logs.filter((item) => item.ticket_eligible || item.aranda_ticket_id).length;
+    return { total, active, blocked, tickets };
+  }, [logs]);
 
   const load = async () => {
     setLoading(true);
@@ -36,34 +45,54 @@ export default function ConversationLogsPage() {
   }, []);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f5f5fa" }}>
+    <div className="botiq-page botiq-admin-page">
       <Navbar currentPage="conversation-logs" />
 
-      <main style={{ padding: "28px 32px" }}>
+      <main className="botiq-page-main">
         <header style={{ marginBottom: 24 }}>
-          <h1 style={{ color: C, fontSize: 24, margin: 0 }}>Logs de conversaciones</h1>
-          <p style={{ color: "#6b6b8a", marginTop: 6, fontSize: 13 }}>
+          <h1 style={{ color: C, fontSize: "clamp(22px, 3vw, 28px)", margin: 0 }}>
+            Logs de conversaciones
+          </h1>
+          <p style={{ color: "#6b6b8a", marginTop: 6, fontSize: 13, lineHeight: 1.6 }}>
             Consulta trazabilidad por usuario, perfil, sesión, URL/IP, elegibilidad de ticket y escalamiento a Aranda.
           </p>
         </header>
 
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: 12,
+            marginBottom: 16,
+          }}
+        >
+          <Metric label="Total" value={stats.total} />
+          <Metric label="Activas" value={stats.active} color="#059669" />
+          <Metric label="Bloqueadas" value={stats.blocked} color="#dc2626" />
+          <Metric label="Tickets / elegibles" value={stats.tickets} color="#d97706" />
+        </section>
+
         {error && <div style={alertStyle}>⚠️ {error}</div>}
 
-        <section style={cardStyle}>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
+        <section className="botiq-card" style={{ padding: 16, marginBottom: 16 }}>
+          <div className="botiq-log-filters">
             <label style={labelStyle}>
               Buscar
               <input
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="usuario, correo o texto consultado"
-                style={{ ...inputStyle, minWidth: 280 }}
+                onChange={(event) => setQ(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") load();
+                }}
+                placeholder="usuario, correo, URL o texto consultado"
+                className="botiq-form-control"
+                style={{ minWidth: 280 }}
               />
             </label>
 
             <label style={labelStyle}>
               Perfil
-              <select value={profile} onChange={(e) => setProfile(e.target.value)} style={inputStyle}>
+              <select value={profile} onChange={(event) => setProfile(event.target.value)} className="botiq-form-control">
                 <option value="">Todos</option>
                 <option value="employee">Empleado</option>
                 <option value="support_engineer">Ingeniero de soporte</option>
@@ -72,7 +101,7 @@ export default function ConversationLogsPage() {
 
             <label style={labelStyle}>
               Estado
-              <select value={status} onChange={(e) => setStatus(e.target.value)} style={inputStyle}>
+              <select value={status} onChange={(event) => setStatus(event.target.value)} className="botiq-form-control">
                 <option value="">Todos</option>
                 <option value="active">Activa</option>
                 <option value="ended">Finalizada</option>
@@ -80,71 +109,23 @@ export default function ConversationLogsPage() {
               </select>
             </label>
 
-            <button onClick={load} style={primaryBtn}>Buscar</button>
+            <button onClick={load} style={primaryBtn}>
+              {loading ? "Consultando..." : "Filtrar"}
+            </button>
           </div>
         </section>
 
-        <section style={cardStyle}>
+        <section className="botiq-log-grid">
           {loading ? (
-            <p style={{ color: "#6b6b8a" }}>Cargando logs...</p>
-          ) : logs.length === 0 ? (
-            <p style={{ color: "#6b6b8a" }}>No hay registros para mostrar.</p>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1180 }}>
-                <thead>
-                  <tr style={{ background: "#f5f5fa", color: C, textAlign: "left", fontSize: 12 }}>
-                    <Th>Fecha</Th>
-                    <Th>Usuario</Th>
-                    <Th>Perfil</Th>
-                    <Th>Estado</Th>
-                    <Th>Preguntas</Th>
-                    <Th>URL/IP</Th>
-                    <Th>Ticket</Th>
-                    <Th>Último mensaje</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {logs.map((log) => (
-                    <tr key={log.id} style={{ borderBottom: "1px solid #e2e1f0", fontSize: 12 }}>
-                      <Td>{new Date(log.created_at).toLocaleString()}</Td>
-                      <Td>
-                        <strong style={{ color: C }}>{log.user_full_name}</strong>
-                        <div style={{ color: "#6b6b8a", fontSize: 11 }}>{log.user_email}</div>
-                      </Td>
-                      <Td>
-                        <Badge>{log.selected_profile === "support_engineer" ? "Soporte" : "Empleado"}</Badge>
-                        {log.support_network_validated && <Badge ok>red ok</Badge>}
-                      </Td>
-                      <Td><StatusBadge status={log.session_status} /></Td>
-                      <Td>
-                        {log.question_count}
-                        <div style={{ color: "#6b6b8a", fontSize: 11 }}>
-                          intentos: {log.resolution_attempts}
-                        </div>
-                      </Td>
-                      <Td>
-                        {log.detected_url && <div style={{ color: "#0284c7" }}>🔗 {log.detected_url}</div>}
-                        {log.detected_ip && <div style={{ color: "#0284c7" }}>IP {log.detected_ip}</div>}
-                        {!log.detected_url && !log.detected_ip && <span style={{ color: "#9ca3af" }}>N/A</span>}
-                      </Td>
-                      <Td>
-                        {log.aranda_ticket_id ? (
-                          <Badge ok>{log.aranda_ticket_id}</Badge>
-                        ) : log.ticket_eligible ? (
-                          <Badge warn>elegible</Badge>
-                        ) : (
-                          <span style={{ color: "#9ca3af" }}>No</span>
-                        )}
-                      </Td>
-                      <Td style={{ maxWidth: 300 }}>
-                        <span style={{ color: "#374151" }}>{log.last_message || "Sin mensaje"}</span>
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="botiq-card" style={{ padding: 18, color: "#6b6b8a" }}>
+              Cargando logs...
             </div>
+          ) : logs.length === 0 ? (
+            <div className="botiq-card" style={{ padding: 18, color: "#6b6b8a" }}>
+              No hay logs para mostrar.
+            </div>
+          ) : (
+            logs.map((item) => <LogCard key={item.id} item={item} />)
           )}
         </section>
       </main>
@@ -152,83 +133,121 @@ export default function ConversationLogsPage() {
   );
 }
 
-function Th({ children }) {
-  return <th style={{ padding: "10px 12px", borderBottom: "1px solid #e2e1f0" }}>{children}</th>;
+function LogCard({ item }) {
+  const profile = item.selected_profile === "support_engineer" ? "Ingeniero de soporte" : "Empleado";
+  const statusColor = getStatusColor(item.session_status);
+
+  return (
+    <article className="botiq-log-card">
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+          <Badge color={statusColor}>{item.session_status || "active"}</Badge>
+          <Badge color={item.selected_profile === "support_engineer" ? "#0284c7" : "#059669"}>{profile}</Badge>
+          {item.ticket_eligible && <Badge color="#d97706">ticket elegible</Badge>}
+          {item.aranda_ticket_id && <Badge color="#059669">Aranda {item.aranda_ticket_id}</Badge>}
+        </div>
+
+        <h3 style={{ color: C, fontSize: 14, marginBottom: 4, overflowWrap: "anywhere" }}>
+          {item.user_full_name || "Usuario"} · {item.user_email}
+        </h3>
+
+        <p style={{ color: "#6b6b8a", fontSize: 12, lineHeight: 1.55, overflowWrap: "anywhere" }}>
+          {item.last_message || "Sin mensaje de usuario registrado."}
+        </p>
+
+        {(item.detected_url || item.detected_ip) && (
+          <p style={{ color: "#0284c7", fontSize: 12, marginTop: 8, overflowWrap: "anywhere" }}>
+            {item.detected_url ? `🔗 ${item.detected_url}` : ""}
+            {item.detected_ip ? ` · 🖥️ ${item.detected_ip}` : ""}
+          </p>
+        )}
+      </div>
+
+      <div style={{ display: "grid", gap: 6, color: "#374151", fontSize: 12 }}>
+        <Info label="Preguntas" value={item.question_count ?? 0} />
+        <Info label="Fuera de alcance" value={item.out_of_scope_count ?? 0} />
+        <Info label="Intentos solución" value={item.resolution_attempts ?? 0} />
+        <Info label="Usuario red" value={item.support_network_username || "N/A"} />
+      </div>
+
+      <div style={{ textAlign: "right", color: "#6b6b8a", fontSize: 11, lineHeight: 1.6 }}>
+        <div>{item.created_at ? new Date(item.created_at).toLocaleString() : "N/A"}</div>
+        {item.ended_at && <div>Fin: {new Date(item.ended_at).toLocaleString()}</div>}
+      </div>
+    </article>
+  );
 }
 
-function Td({ children, style = {} }) {
-  return <td style={{ padding: "12px", verticalAlign: "top", ...style }}>{children}</td>;
+function Metric({ label, value, color = C }) {
+  return (
+    <article className="botiq-card" style={{ padding: 16 }}>
+      <div style={{ color: "#6b6b8a", fontSize: 12, fontWeight: 700 }}>{label}</div>
+      <div style={{ color, fontSize: 26, fontWeight: 900, marginTop: 4 }}>{value}</div>
+    </article>
+  );
 }
 
-function Badge({ children, ok = false, warn = false }) {
-  let background = "#f5f5fa";
-  let color = C;
-  let border = "#e2e1f0";
-
-  if (ok) {
-    background = "#ecfdf5";
-    color = "#065f46";
-    border = "#bbf7d0";
-  }
-
-  if (warn) {
-    background = "#fffbeb";
-    color = "#92400e";
-    border = "#fde68a";
-  }
-
-  return <span style={{ display: "inline-block", background, color, border: `1px solid ${border}`, borderRadius: 999, padding: "3px 8px", fontSize: 11, fontWeight: 700, marginRight: 4 }}>{children}</span>;
+function Info({ label, value }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+      <span style={{ color: "#6b6b8a" }}>{label}</span>
+      <strong style={{ color: C, textAlign: "right", overflowWrap: "anywhere" }}>{value}</strong>
+    </div>
+  );
 }
 
-function StatusBadge({ status }) {
-  if (status === "active") return <Badge ok>activa</Badge>;
-  if (status === "blocked") return <span style={{ background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 999, padding: "3px 8px", fontSize: 11, fontWeight: 700 }}>bloqueada</span>;
-  return <Badge>{status || "ended"}</Badge>;
+function Badge({ children, color }) {
+  return (
+    <span
+      style={{
+        background: `${color}14`,
+        color,
+        border: `1px solid ${color}30`,
+        borderRadius: 999,
+        padding: "4px 8px",
+        fontSize: 10,
+        fontWeight: 850,
+        textTransform: "uppercase",
+        letterSpacing: ".2px",
+      }}
+    >
+      {children}
+    </span>
+  );
 }
 
-const cardStyle = {
-  background: "#fff",
-  border: "1px solid #e2e1f0",
-  borderRadius: 14,
-  padding: 20,
-  marginBottom: 20,
-  boxShadow: "0 1px 4px rgba(39,33,99,0.06)",
-};
+function getStatusColor(status) {
+  if (status === "active") return "#059669";
+  if (status === "blocked") return "#dc2626";
+  if (status === "ended") return "#6b6b8a";
+  return "#0284c7";
+}
 
 const labelStyle = {
-  display: "flex",
-  flexDirection: "column",
+  display: "grid",
   gap: 6,
   fontSize: 12,
-  fontWeight: 700,
   color: "#374151",
-};
-
-const inputStyle = {
-  border: "1px solid #e2e1f0",
-  borderRadius: 8,
-  padding: "9px 10px",
-  fontSize: 13,
-  outline: "none",
-  background: "#fff",
+  fontWeight: 750,
 };
 
 const primaryBtn = {
+  border: "none",
+  borderRadius: 12,
   background: C,
   color: "#fff",
-  border: "none",
-  borderRadius: 8,
-  padding: "10px 16px",
+  padding: "12px 18px",
   cursor: "pointer",
-  fontWeight: 700,
+  fontWeight: 850,
+  minHeight: 44,
 };
 
 const alertStyle = {
   background: "#fef2f2",
   color: "#991b1b",
   border: "1px solid #fecaca",
-  borderRadius: 10,
+  borderRadius: 14,
   padding: "12px 14px",
-  marginBottom: 18,
+  marginBottom: 16,
   fontSize: 13,
 };
