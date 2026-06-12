@@ -437,3 +437,5 @@ if (typeof document !== "undefined" && !document.getElementById("botiq-dashboard
   `;
   document.head.appendChild(style);
 }
+
+

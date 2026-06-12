@@ -197,3 +197,4 @@ const noticeStyle = {
   borderRadius: 10,
   lineHeight: 1.6,
 };
+

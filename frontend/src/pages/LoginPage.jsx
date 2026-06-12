@@ -288,3 +288,5 @@ function blurInput(e) {
   e.target.style.boxShadow = "none";
   e.target.style.background = "#fafafa";
 }
+
+

@@ -124,15 +124,24 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
     event.target.value = "";
   };
 
-  const pos = position === "bottom-left" ? { bottom: 24, left: 24 } : { bottom: 24, right: 24 };
+  const pos = position === "bottom-left" ? { bottom: 22, left: 22 } : { bottom: 22, right: 22 };
+  const fixedStyle = {
+    ...pos,
+    position: "fixed",
+    zIndex: 2147483000,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: position === "bottom-left" ? "flex-start" : "flex-end",
+    pointerEvents: "none",
+  };
   const quickQuestions = session?.selected_profile === "support_engineer" ? QUICK_SUPPORT : QUICK_EMPLOYEE;
 
   const content = (
     <div
       className={embedded ? "botiq-chat-panel botiq-chat-panel--embedded" : "botiq-chat-panel animate__animated animate__fadeInUp"}
       style={{
-        width: embedded ? "100%" : 420,
-        height: embedded ? "calc(100vh - 58px)" : 660,
+        width: embedded ? "100%" : "min(420px, calc(100vw - 24px))",
+        height: embedded ? "calc(100vh - 58px)" : "min(660px, calc(100vh - 108px))",
         background: "#fff",
         borderRadius: embedded ? 0 : 20,
         boxShadow: embedded ? "none" : "0 24px 72px rgba(39,33,99,0.26)",
@@ -226,12 +235,12 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
   if (embedded) return content;
 
   return (
-    <div className="botiq-chat-fixed" style={{ ...pos }}>
-      {open && content}
+    <div className="botiq-chat-fixed" style={fixedStyle}>
+      {open && <div style={{ pointerEvents: "auto" }}>{content}</div>}
 
       <button
         onClick={() => setOpen((value) => !value)}
-        className="botiq-chat-float-button" style={floatBtn(primaryColor)}
+        className="botiq-chat-float-button" style={{ ...floatBtn(primaryColor), pointerEvents: "auto" }}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = "scale(1.08)";
           e.currentTarget.style.boxShadow = `0 7px 30px ${primaryColor}75`;
@@ -541,3 +550,4 @@ const closeImageBtn = {
   color: "#fff",
   fontSize: 11,
 };
+

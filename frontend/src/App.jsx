@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
+import ChatWidget from "./components/ChatWidget";
 import ChatPage from "./pages/ChatPage";
 import ConversationLogsPage from "./pages/ConversationLogsPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -7,6 +8,8 @@ import FaqsPage from "./pages/FaqsPage";
 import KnowledgeBasePage from "./pages/KnowledgeBasePage";
 import LoginPage from "./pages/LoginPage";
 import UsersPage from "./pages/UsersPage";
+
+const C = "#272163";
 
 function getUser() {
   try {
@@ -16,7 +19,7 @@ function getUser() {
   }
 }
 
-function Guard({ children, adminOnly = false }) {
+function Guard({ children, adminOnly = false, showFloatingChat = true }) {
   const user = getUser();
 
   if (!user) return <Navigate to="/login" replace />;
@@ -25,7 +28,12 @@ function Guard({ children, adminOnly = false }) {
     return <Navigate to="/chat" replace />;
   }
 
-  return children;
+  return (
+    <>
+      {children}
+      {showFloatingChat && <ChatWidget primaryColor={C} position="bottom-right" />}
+    </>
+  );
 }
 
 export default function App() {

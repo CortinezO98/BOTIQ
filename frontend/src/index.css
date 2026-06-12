@@ -18,10 +18,15 @@
   --botiq-warning: #d97706;
   --botiq-danger: #dc2626;
   --botiq-info: #0284c7;
+  --botiq-shadow: 0 18px 46px rgba(39, 33, 99, 0.08);
 }
 
 html, body, #root {
   min-height: 100%;
+}
+
+html {
+  overflow-x: hidden;
 }
 
 body {
@@ -30,6 +35,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background: var(--botiq-surface);
   color: var(--botiq-text);
+  overflow-x: hidden;
 }
 
 button, input, textarea, select {
@@ -40,15 +46,203 @@ button {
   border: none;
 }
 
+img, svg, video, canvas {
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+}
+
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--botiq-border); border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--botiq-primary-light); }
 
-@media (max-width: 820px) {
+/* Shell general */
+.botiq-page,
+.botiq-page-shell,
+.botiq-admin-page {
+  min-height: 100vh;
+  background: var(--botiq-surface);
+}
+
+.botiq-container,
+.botiq-page-main {
+  width: min(100% - 48px, 1500px);
+  margin: 0 auto;
+  padding: 28px 0 42px;
+}
+
+.botiq-card {
+  background: #fff;
+  border: 1px solid var(--botiq-border);
+  border-radius: 18px;
+  box-shadow: var(--botiq-shadow);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.botiq-form-control,
+.botiq-page-main input,
+.botiq-page-main textarea,
+.botiq-page-main select,
+.botiq-card input,
+.botiq-card textarea,
+.botiq-card select {
+  max-width: 100%;
+}
+
+/* Botón flotante: este era el error principal */
+.botiq-chat-fixed {
+  position: fixed !important;
+  z-index: 2147483000 !important;
+  isolation: isolate;
+}
+
+.botiq-chat-float-button {
+  flex-shrink: 0;
+}
+
+.botiq-chat-float-button:focus-visible {
+  outline: 3px solid rgba(79, 70, 229, 0.35);
+  outline-offset: 4px;
+}
+
+.botiq-chat-content {
+  min-width: 0;
+}
+
+.botiq-profile-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.botiq-chat-bubble-text {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Historial de chat */
+.botiq-chat-history {
+  width: 300px;
+  flex: 0 0 300px;
+}
+
+.botiq-chat-layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  min-height: calc(100vh - 58px);
+}
+
+.botiq-chat-main {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+/* Navbar */
+.botiq-nav-mobile-toggle {
+  display: none !important;
+}
+
+/* Logs y reportería */
+.botiq-log-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 190px 190px auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.botiq-log-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.botiq-log-card {
+  background: #fff;
+  border: 1px solid var(--botiq-border);
+  border-radius: 16px;
+  padding: 15px;
+  box-shadow: 0 8px 24px rgba(39, 33, 99, 0.06);
+}
+
+/* Login anterior + animate */
+.botiq-login-page-inline {
+  min-height: 100vh;
+}
+
+.botiq-login-grid-inline {
+  width: 100%;
+}
+
+.botiq-login-pills-inline {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Tablas y bloques con overflow */
+.botiq-page-main table,
+.botiq-card table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.botiq-table-wrap,
+.botiq-responsive-table {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* Responsive escritorio medio */
+@media (max-width: 1180px) {
+  .botiq-container,
+  .botiq-page-main {
+    width: min(100% - 32px, 1120px);
+  }
+
+  .botiq-container > section {
+    grid-template-columns: 1fr !important;
+  }
+
+  .botiq-log-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Tablet */
+@media (max-width: 900px) {
+  .botiq-nav-desktop-links {
+    display: none !important;
+  }
+
+  .botiq-nav-mobile-toggle {
+    display: inline-flex !important;
+  }
+
+  .botiq-chat-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .botiq-chat-history {
+    display: none !important;
+  }
+
+  .botiq-page-main,
+  .botiq-container {
+    width: min(100% - 28px, 760px);
+    padding-top: 22px;
+  }
+
+  .botiq-log-filters {
+    grid-template-columns: 1fr;
+  }
+
   .botiq-login-grid-inline {
     grid-template-columns: 1fr !important;
-    max-width: 520px !important;
+    max-width: 540px !important;
   }
 
   .botiq-login-hero-inline {
@@ -75,7 +269,15 @@ button {
   }
 }
 
+/* Móvil */
 @media (max-width: 560px) {
+  .botiq-page-main,
+  .botiq-container {
+    width: calc(100% - 24px);
+    padding-top: 18px;
+    padding-bottom: 92px;
+  }
+
   .botiq-login-page-inline {
     padding: 16px !important;
     align-items: start !important;
@@ -95,23 +297,49 @@ button {
     padding: 24px 18px !important;
   }
 
-  .botiq-nav-desktop-links {
-    display: none !important;
+  .botiq-chat-fixed {
+    right: 12px !important;
+    left: 12px !important;
+    bottom: 12px !important;
+    align-items: flex-end !important;
   }
 
-  .botiq-nav-mobile-toggle {
-    display: inline-flex !important;
+  .botiq-chat-fixed > div {
+    width: 100% !important;
+  }
+
+  .botiq-chat-float-button {
+    width: 56px !important;
+    height: 56px !important;
+  }
+
+  .botiq-profile-options {
+    grid-template-columns: 1fr !important;
+  }
+
+  .botiq-chat-bubble-text {
+    font-size: 12px !important;
   }
 }
 
-@media (min-width: 561px) {
-  .botiq-nav-mobile-toggle {
-    display: none !important;
+/* Móvil pequeño */
+@media (max-width: 380px) {
+  .botiq-page-main,
+  .botiq-container {
+    width: calc(100% - 18px);
+  }
+
+  .botiq-login-card-inline {
+    padding: 20px 14px !important;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate__animated {
     animation: none !important;
+  }
+
+  * {
+    scroll-behavior: auto !important;
   }
 }
