@@ -1,16 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from typing import List
 import uuid
 
-from app.db.session import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.api.deps import require_admin
-from app.models.user import User
-from app.models.network_user import NetworkUser
-from app.schemas.user import UserResponse, AdminCreateUser, AdminUpdateUser, AdminChangeRole
-from app.schemas.network_user import NetworkUserCreate, NetworkUserUpdate, NetworkUserResponse
 from app.core.security import hash_password
+from app.db.session import get_db
+from app.models.network_user import NetworkUser
+from app.models.user import User
+from app.schemas.network_user import NetworkUserCreate, NetworkUserResponse, NetworkUserUpdate
+from app.schemas.user import AdminChangeRole, AdminCreateUser, AdminUpdateUser, UserResponse
 from app.services.audit_service import audit_service
 
 router = APIRouter()
@@ -27,6 +28,7 @@ async def create_user(data: AdminCreateUser, db: AsyncSession = Depends(get_db),
     result = await db.execute(select(User).where(User.email == data.email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="El email ya está registrado")
+
     user = User(email=data.email, full_name=data.full_name, hashed_password=hash_password(data.password), role=data.role)
     db.add(user)
     await db.flush()
@@ -42,10 +44,12 @@ async def update_user(user_id: uuid.UUID, data: AdminUpdateUser, db: AsyncSessio
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
     if data.full_name:
         user.full_name = data.full_name
     if data.password:
         user.hashed_password = hash_password(data.password)
+
     await audit_service.log(db, "user_updated", current.id, "admin", {"target_user_id": str(user.id), "email": user.email})
     await db.commit()
     await db.refresh(user)
@@ -56,10 +60,12 @@ async def update_user(user_id: uuid.UUID, data: AdminUpdateUser, db: AsyncSessio
 async def change_role(user_id: uuid.UUID, data: AdminChangeRole, db: AsyncSession = Depends(get_db), current: User = Depends(require_admin)):
     if str(user_id) == str(current.id):
         raise HTTPException(status_code=400, detail="No puedes cambiar tu propio rol")
+
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
     old_role = user.role.value
     user.role = data.role
     await audit_service.log(db, "role_changed", current.id, "admin", {"target_user_id": str(user.id), "old_role": old_role, "new_role": data.role.value})
@@ -72,10 +78,12 @@ async def change_role(user_id: uuid.UUID, data: AdminChangeRole, db: AsyncSessio
 async def disable_user(user_id: uuid.UUID, db: AsyncSession = Depends(get_db), current: User = Depends(require_admin)):
     if str(user_id) == str(current.id):
         raise HTTPException(status_code=400, detail="No puedes desactivar tu propia cuenta")
+
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
     user.is_active = False
     await audit_service.log(db, "user_disabled", current.id, "admin", {"target_user_id": str(user.id), "email": user.email})
     await db.commit()
@@ -89,6 +97,7 @@ async def enable_user(user_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
     user.is_active = True
     await audit_service.log(db, "user_enabled", current.id, "admin", {"target_user_id": str(user.id), "email": user.email})
     await db.commit()
@@ -100,9 +109,16 @@ async def enable_user(user_id: uuid.UUID, db: AsyncSession = Depends(get_db), cu
 async def list_network_users(q: str = Query(""), db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     result = await db.execute(select(NetworkUser).order_by(NetworkUser.created_at.desc()))
     users = result.scalars().all()
+
     if q:
         qn = q.lower()
-        users = [u for u in users if qn in (u.network_username or "").lower() or qn in (u.email or "").lower() or qn in (u.full_name or "").lower()]
+        users = [
+            u for u in users
+            if qn in (u.network_username or "").lower()
+            or qn in (u.email or "").lower()
+            or qn in (u.full_name or "").lower()
+        ]
+
     return users
 
 
@@ -112,6 +128,7 @@ async def create_network_user(data: NetworkUserCreate, db: AsyncSession = Depend
     result = await db.execute(select(NetworkUser).where(NetworkUser.network_username == username))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="El usuario de red ya existe")
+
     network_user = NetworkUser(
         network_username=username,
         email=str(data.email).lower() if data.email else None,
@@ -133,10 +150,12 @@ async def update_network_user(network_user_id: uuid.UUID, data: NetworkUserUpdat
     network_user = result.scalar_one_or_none()
     if not network_user:
         raise HTTPException(status_code=404, detail="Usuario de red no encontrado")
+
     for field, value in data.model_dump(exclude_unset=True).items():
         if field == "email" and value:
             value = str(value).lower()
         setattr(network_user, field, value)
+
     await audit_service.log(db, "network_user_updated", current.id, "admin", {"network_username": network_user.network_username})
     await db.commit()
     await db.refresh(network_user)

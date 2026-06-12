@@ -1,19 +1,21 @@
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool
+import os
+import sys
+
 from alembic import context
-import os, sys
+from sqlalchemy import engine_from_config, pool
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from app.core.config import settings
 from app.db.session import Base
-from app.models.user import User
+from app.models.audit_log import AuditLog
 from app.models.conversation import Conversation, Message
 from app.models.faq import FAQ
-from app.models.server_log import ServerLog
 from app.models.knowledge_gap import KnowledgeGap
-from app.models.audit_log import AuditLog
 from app.models.network_user import NetworkUser
+from app.models.server_log import ServerLog
+from app.models.user import User
 
 config = context.config
 sync_url = settings.DATABASE_URL.replace("+asyncpg", "")

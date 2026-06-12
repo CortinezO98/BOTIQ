@@ -1,35 +1,35 @@
-from typing import Optional, Dict, List
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from rapidfuzz import fuzz
+from typing import Dict, List, Optional
 
+from rapidfuzz import fuzz
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
 from app.models.faq import FAQ
 from app.services.vertex.gemini_text_service import gemini_text_service
-from app.core.config import settings
 
 SYSTEM = """Eres BOTIQ, el asistente virtual corporativo de IQ.
-Ayudas a los empleados con:
-- Problemas de acceso a portales y sistemas internos
-- Errores en aplicaciones de oficina (Word, Excel, Outlook, Teams)
-- Procedimientos internos de TI
-- Soporte técnico básico
 
-Reglas:
-1. Responde siempre en español, claro y conciso
-2. Si tienes una FAQ relevante, úsala como base
-3. Si no puedes resolver, indica que se escalará a Aranda
-4. Sé amable y profesional
+Alcance permitido:
+- Accesos a portales, URLs y aplicativos corporativos
+- Errores de aplicaciones como Word, Excel, Outlook, Teams, VPN y sistemas internos
+- Procedimientos internos de TI
+- Disponibilidad de aplicativos/servidores cuando BOTIQ reciba información interna
+- Soporte técnico básico y orientación antes de crear ticket
+
+Reglas obligatorias:
+1. Responde siempre en español, claro y conciso.
+2. No respondas temas ajenos al negocio o fuera del soporte corporativo de IQ.
+3. Si el usuario reporta que no puede entrar a una URL y no dio URL/IP, pídele la URL o IP.
+4. Si tienes una FAQ relevante, úsala como base.
+5. Antes de recomendar ticket, intenta agotar validaciones básicas: URL/IP, error exacto, navegador/VPN/credenciales/cache y estado del servicio si existe.
+6. No inventes estados de servidores ni resultados de APIs; usa únicamente la información interna entregada en el prompt.
+7. Si no hay información suficiente, indícalo y pide los datos faltantes.
 """
 
 
 class EmployeeBotService:
     async def get_faq_answer(self, query: str, db: AsyncSession) -> Optional[Dict]:
-        """
-        Busca la FAQ más parecida usando coincidencia difusa.
-        Esto mejora casos como:
-        - Usuario: "no me deja entrar al sistema"
-        - FAQ: "No puedo ingresar al portal"
-        """
         result = await db.execute(
             select(FAQ)
             .where(FAQ.is_active == True)
@@ -44,21 +44,13 @@ class EmployeeBotService:
 
         for faq in faqs:
             question_score = fuzz.token_set_ratio(query_norm, faq.question.lower())
-
             answer_score = fuzz.token_set_ratio(query_norm, faq.answer.lower()[:300])
 
             tag_score = 0
             if faq.tags:
-                tag_score = max(
-                    fuzz.token_set_ratio(query_norm, tag.lower())
-                    for tag in faq.tags
-                    if tag
-                )
+                tag_score = max(fuzz.token_set_ratio(query_norm, tag.lower()) for tag in faq.tags if tag)
 
-            category_score = 0
-            if faq.category:
-                category_score = fuzz.token_set_ratio(query_norm, faq.category.lower())
-
+            category_score = fuzz.token_set_ratio(query_norm, faq.category.lower()) if faq.category else 0
             score = max(question_score, answer_score * 0.75, tag_score, category_score)
 
             if score > best_score:
@@ -99,13 +91,13 @@ class EmployeeBotService:
             parts.append(f"Análisis de imagen: {image_analysis}")
 
         context = "\n\n".join(parts)
-        prompt = f"{context}\n\nConsulta: {user_message}" if context else user_message
+        prompt = f"{context}\n\nConsulta del empleado: {user_message}" if context else user_message
 
         result = await gemini_text_service.generate(
             prompt=prompt,
             system_instruction=SYSTEM,
             history=history,
-            temperature=0.3,
+            temperature=0.25,
             model=settings.VERTEX_FAST_MODEL,
         )
 
@@ -113,11 +105,12 @@ class EmployeeBotService:
         escalate = any(
             kw in text_lower
             for kw in [
+                "no hay información suficiente",
                 "no tengo información",
-                "contacta a soporte",
-                "crea un ticket",
-                "aranda",
                 "no encontré información",
+                "crear ticket",
+                "aranda",
+                "escalar",
             ]
         )
 

@@ -1,11 +1,12 @@
-from pydantic_settings import BaseSettings
-from typing import List
 from functools import lru_cache
+from typing import List
+
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     APP_NAME: str = "BOTIQ"
-    APP_VERSION: str = "1.2.0"
+    APP_VERSION: str = "1.3.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
@@ -43,32 +44,52 @@ class Settings(BaseSettings):
     GDRIVE_FOLDER_ID: str = ""
     GCS_BUCKET_NAME: str = "botiq-images-bucket"
 
-    SERVER_DASHBOARD_API_URL: str = ""
-    SERVER_DASHBOARD_API_KEY: str = ""
-
     CHROMA_HOST: str = "chromadb"
     CHROMA_PORT: int = 8000
     CHROMA_COLLECTION_NAME: str = "botiq_knowledge_base"
 
-    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:5180,http://localhost:5190,http://localhost:3000"
+    # API externa de estados / disponibilidad de aplicativos.
+    # Esta API es insumo interno del bot, no se expone directamente al usuario.
+    APPLICATION_STATUS_API_URL: str = ""
+    APPLICATION_STATUS_API_KEY: str = ""
+    APPLICATION_STATUS_TIMEOUT_SECONDS: int = 10
 
+    # Compatibilidad con el módulo antiguo de servidores.
+    SERVER_DASHBOARD_API_URL: str = ""
+    SERVER_DASHBOARD_API_KEY: str = ""
+
+    # Integración Aranda.
+    # Si ARANDA_API_URL está vacío, BOTIQ no crea ticket real y deja el caso marcado como elegible.
+    ARANDA_API_URL: str = ""
+    ARANDA_API_KEY: str = ""
+    ARANDA_PROJECT_ID: str = ""
+    ARANDA_CATEGORY_ID: str = ""
+    ARANDA_SERVICE_ID: str = ""
+    ARANDA_TIMEOUT_SECONDS: int = 15
+
+    # Controles de consumo y seguridad conversacional.
     MAX_QUESTIONS_PER_SESSION: int = 8
     MAX_OUT_OF_SCOPE_PER_SESSION: int = 1
     MAX_MESSAGE_LENGTH: int = 1200
+    MIN_RESOLUTION_ATTEMPTS_BEFORE_TICKET: int = 2
     REQUIRE_SUPPORT_NETWORK_VALIDATION: bool = True
     SUPPORT_ALLOWED_EMAIL_DOMAINS: str = "iq-online.com"
 
     BUSINESS_SCOPE_KEYWORDS: str = (
-        "portal,sistema,aplicacion,aplicación,correo,outlook,excel,word,teams,"
-        "vpn,contraseña,password,login,acceso,servidor,server,base de conocimiento,"
-        "documentación,documentacion,procedimiento,incidente,soporte,aranda,"
-        "red,firewall,certificado,ssl,backup,memoria,cpu,disco,latencia"
+        "portal,sistema,aplicacion,aplicación,aplicativo,app,url,pagina,página,ip,"
+        "correo,outlook,excel,word,teams,vpn,contraseña,password,login,acceso,"
+        "servidor,server,base de conocimiento,documentación,documentacion,"
+        "procedimiento,incidente,soporte,aranda,ticket,red,firewall,certificado,"
+        "ssl,backup,memoria,cpu,disco,latencia,caido,caído,no responde,error"
     )
+
     OUT_OF_SCOPE_KEYWORDS: str = (
         "chiste,novia,novio,apuesta,casino,política,politica,religión,religion,"
         "sexo,droga,drogas,futbol,fútbol,receta,cocina,pelicula,película,"
-        "tarea escolar,poema,cancion,canción,instagram,tiktok"
+        "tarea escolar,poema,cancion,canción,instagram,tiktok,horoscopo,horóscopo"
     )
+
+    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:5180,http://localhost:5190,http://localhost:3000"
 
     def get_allowed_origins(self) -> List[str]:
         return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]

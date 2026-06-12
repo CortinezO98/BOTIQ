@@ -1,38 +1,46 @@
-import { useState, useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { chatAPI } from "../services/api";
+
+function normalizeError(error, fallback = "Error procesando solicitud.") {
+  const detail = error.response?.data?.detail;
+  if (Array.isArray(detail)) return detail.map((item) => item.msg).join(", ");
+  return detail || error.message || fallback;
+}
 
 export function useChat() {
   const [messages, setMessages] = useState([]);
   const [session, setSession] = useState(null);
+  const [sessionStatus, setSessionStatus] = useState("idle");
   const [loading, setLoading] = useState(false);
-  const [sessionStatus, setSessionStatus] = useState("not_started");
   const sid = useRef(null);
 
-  const add = (role, content, meta = {}) =>
-    setMessages((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), role, content, meta, ts: new Date() },
-    ]);
+  const add = (role, content, meta = {}) => {
+    const item = {
+      id: crypto.randomUUID(),
+      role,
+      content,
+      meta,
+      ts: new Date(),
+    };
+    setMessages((prev) => [...prev, item]);
+    return item;
+  };
 
   const startSession = useCallback(async ({ selected_profile, network_username }) => {
     setLoading(true);
     try {
-      const { data } = await chatAPI.startSession({ selected_profile, network_username: network_username || null });
+      const { data } = await chatAPI.startSession({ selected_profile, network_username });
       sid.current = data.session_id;
       setSession(data);
       setSessionStatus("active");
-      setMessages([
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: data.welcome_message,
-          meta: { module: data.module_used, selectedProfile: data.selected_profile, system: true },
-          ts: new Date(),
-        },
-      ]);
+      setMessages([]);
+      add("assistant", data.welcome_message, {
+        system: true,
+        selectedProfile: data.selected_profile,
+      });
       return data;
-    } catch (e) {
-      const msg = e.response?.data?.detail || "No fue posible iniciar la sesión";
+    } catch (error) {
+      const msg = normalizeError(error, "No fue posible iniciar la sesión.");
       add("assistant", msg, { isError: true });
       throw new Error(msg);
     } finally {
@@ -41,78 +49,85 @@ export function useChat() {
   }, []);
 
   const sendMessage = useCallback(async (text, imageFile = null) => {
+    if (!session || !sid.current) {
+      add("assistant", "Primero selecciona si eres Empleado o Ingeniero de Soporte.", { isError: true });
+      return;
+    }
+
     if (!text.trim() && !imageFile) return;
-
-    if (!sid.current) {
-      add("assistant", "Primero debes seleccionar si eres Empleado o Ingeniero de Soporte.", { isError: true });
-      return;
-    }
-
-    if (sessionStatus !== "active") {
-      add("assistant", "Esta sesión ya fue finalizada. Inicia una nueva conversación para continuar.", { isError: true });
-      return;
-    }
 
     add("user", text, { imageFile });
     setLoading(true);
 
     try {
       const { data } = await chatAPI.sendMessage(text, sid.current, imageFile);
+
+      setSessionStatus(data.session_status || "active");
+
+      if (session) {
+        setSession((prev) => ({
+          ...prev,
+          question_count: data.question_count,
+          max_questions: data.max_questions,
+          ticket_eligible: data.ticket_eligible,
+          aranda_ticket_id: data.aranda_ticket_id,
+        }));
+      }
+
       add("assistant", data.response, {
         module: data.module_used,
         sources: data.sources,
         escalated: data.escalated_to_aranda,
         hasImage: data.has_image_analysis,
         knowledgeGap: data.knowledge_gap,
-        questionCount: data.question_count,
-        maxQuestions: data.max_questions,
+        applicationStatus: data.application_status,
+        ticketEligible: data.ticket_eligible,
+        arandaTicketId: data.aranda_ticket_id,
         sessionStatus: data.session_status,
         endedReason: data.ended_reason,
+        questionCount: data.question_count,
+        maxQuestions: data.max_questions,
       });
-      setSessionStatus(data.session_status || "active");
-      if (data.session_status !== "active") sid.current = null;
-      return data;
-    } catch (e) {
-      const d = e.response?.data?.detail;
-      add("assistant", Array.isArray(d) ? d.map((x) => x.msg).join(", ") : d || "Error procesando consulta.", { isError: true });
+    } catch (error) {
+      add("assistant", normalizeError(error), { isError: true });
     } finally {
       setLoading(false);
     }
-  }, [sessionStatus]);
+  }, [session]);
 
   const clearChat = useCallback(async () => {
-    try {
-      if (sid.current) await chatAPI.endSession(sid.current);
-    } catch {}
+    if (sid.current) {
+      try {
+        await chatAPI.endSession(sid.current);
+      } catch {
+        // Ignorar error de cierre.
+      }
+    }
+
     setMessages([]);
     setSession(null);
-    setSessionStatus("not_started");
+    setSessionStatus("idle");
     sid.current = null;
   }, []);
 
-  const loadConversation = useCallback(async (conversation) => {
+  const loadConversationMessages = useCallback(async (conversationId) => {
+    setLoading(true);
     try {
-      const { data } = await chatAPI.conversationMessages(conversation.id);
-      sid.current = conversation.session_id;
-      setSession({
-        session_id: conversation.session_id,
-        conversation_id: conversation.id,
-        selected_profile: conversation.selected_profile,
-        module_used: conversation.module,
-        max_questions: conversation.question_count,
-      });
-      setSessionStatus(conversation.session_status || "ended");
-      setMessages(
-        data.map((m) => ({
-          id: m.id,
-          role: m.role === "assistant" || m.role === "system" ? "assistant" : "user",
-          content: m.content,
-          meta: { module: conversation.module, system: m.role === "system" },
-          ts: new Date(m.created_at),
-        }))
-      );
-    } catch {
-      add("assistant", "No fue posible cargar el historial de esta conversación.", { isError: true });
+      const { data } = await chatAPI.conversationMessages(conversationId);
+      const mapped = data.map((msg) => ({
+        id: msg.id,
+        role: msg.role === "assistant" || msg.role === "system" ? "assistant" : "user",
+        content: msg.content,
+        meta: {
+          system: msg.role === "system",
+          ...msg.metadata_,
+        },
+        ts: new Date(msg.created_at),
+      }));
+      setMessages(mapped);
+      return mapped;
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -124,6 +139,6 @@ export function useChat() {
     startSession,
     sendMessage,
     clearChat,
-    loadConversation,
+    loadConversationMessages,
   };
 }

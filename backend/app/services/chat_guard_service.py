@@ -1,7 +1,10 @@
 from datetime import datetime, timezone
 from typing import Optional
+import re
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
 from app.core.roles import UserRole
 from app.models.conversation import Conversation
@@ -10,9 +13,14 @@ from app.models.user import User
 
 
 class ChatGuardResult:
-    def __init__(self, allowed: bool, reason: Optional[str] = None,
-                 final_message: Optional[str] = None, end_session: bool = False,
-                 status: str = "active"):
+    def __init__(
+        self,
+        allowed: bool,
+        reason: Optional[str] = None,
+        final_message: Optional[str] = None,
+        end_session: bool = False,
+        status: str = "active",
+    ):
         self.allowed = allowed
         self.reason = reason
         self.final_message = final_message
@@ -21,16 +29,40 @@ class ChatGuardResult:
 
 
 class ChatGuardService:
+    URL_REGEX = re.compile(r"(https?://[^\s]+|www\.[^\s]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/[^\s]*)?)")
+    IP_REGEX = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+
+    def extract_url(self, text: str) -> Optional[str]:
+        match = self.URL_REGEX.search(text or "")
+        return match.group(0).rstrip(".,;") if match else None
+
+    def extract_ip(self, text: str) -> Optional[str]:
+        match = self.IP_REGEX.search(text or "")
+        return match.group(0) if match else None
+
+    def asks_about_url_or_service(self, text: str) -> bool:
+        msg = (text or "").lower()
+        return any(k in msg for k in ["url", "pagina", "página", "sitio", "portal", "aplicativo", "aplicacion", "aplicación", "no puedo entrar", "no abre"])
+
+    def asks_for_ticket(self, text: str) -> bool:
+        msg = (text or "").lower()
+        return any(k in msg for k in ["crear ticket", "generar ticket", "ticket", "aranda", "escalar", "radicar caso", "crear caso"])
+
     def is_business_related(self, text: str) -> bool:
         msg = (text or "").lower().strip()
         if not msg:
             return False
+
         if any(keyword in msg for keyword in settings.get_out_of_scope_keywords()):
             return False
+
         if any(keyword in msg for keyword in settings.get_business_keywords()):
             return True
+
         if msg in {"hola", "buenas", "buenos dias", "buenos días", "ayuda", "soporte", "gracias"}:
             return True
+
+        # Criterio conservador: permite consultas ambiguas, pero el prompt de IA debe mantener el alcance corporativo.
         return True
 
     async def validate_support_network_user(
@@ -64,6 +96,7 @@ class ChatGuardService:
         email = (current_user.email or "").lower()
         email_user = email.split("@")[0] if "@" in email else email
         email_domain = email.split("@")[1] if "@" in email else ""
+
         if email_domain in allowed_domains and value in {email_user, email}:
             return True, None
 
@@ -100,17 +133,38 @@ class ChatGuardService:
                 return ChatGuardResult(
                     False,
                     "out_of_scope_limit_reached",
-                    "La consulta no está relacionada con servicios corporativos de soporte, conocimiento o infraestructura. Por política de uso adecuado de IA, finalicé esta sesión.",
+                    "No estoy autorizado para responder temas ajenos al negocio. BOTIQ solo atiende consultas sobre aplicativos, soporte, documentación, infraestructura y servicios corporativos de IQ. Por política de uso adecuado de IA, finalicé esta sesión.",
                     True,
                     "blocked",
                 )
+
             return ChatGuardResult(
                 False,
                 "out_of_scope_warning",
-                "Tu consulta parece estar fuera del alcance corporativo de BOTIQ. Puedo ayudarte con accesos, sistemas internos, soporte técnico, documentación, servidores o procedimientos de TI.",
+                "No estoy autorizado para responder ese tipo de consulta. Mi alcance es soporte corporativo de IQ: aplicativos, accesos, URLs, servidores, documentación, procedimientos y tickets de soporte.",
             )
 
         return ChatGuardResult(True)
+
+    def can_create_ticket(self, conversation: Conversation) -> tuple[bool, str]:
+        if conversation.escalated_to_aranda and conversation.aranda_ticket_id:
+            return False, f"Ya existe un ticket asociado a esta conversación: {conversation.aranda_ticket_id}"
+
+        if conversation.ticket_eligible:
+            return True, "La conversación ya es elegible para ticket."
+
+        if (conversation.resolution_attempts or 0) < settings.MIN_RESOLUTION_ATTEMPTS_BEFORE_TICKET:
+            return False, (
+                f"Antes de crear un ticket debemos agotar al menos {settings.MIN_RESOLUTION_ATTEMPTS_BEFORE_TICKET} validaciones. "
+                "Primero revisemos disponibilidad del aplicativo, URL/IP, base de conocimiento y pasos de solución conocidos."
+            )
+
+        return True, "Ya se agotaron las validaciones mínimas para crear ticket."
+
+    def mark_resolution_attempt(self, conversation: Conversation):
+        conversation.resolution_attempts = (conversation.resolution_attempts or 0) + 1
+        if conversation.resolution_attempts >= settings.MIN_RESOLUTION_ATTEMPTS_BEFORE_TICKET:
+            conversation.ticket_eligible = True
 
     def finish_conversation(self, conversation: Conversation, reason: str, status: str = "ended"):
         conversation.session_status = status

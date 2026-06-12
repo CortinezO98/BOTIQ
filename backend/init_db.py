@@ -1,12 +1,13 @@
 import asyncio
-from app.db.session import engine, Base
-from app.models.user import User
+
+from app.db.session import Base, engine
+from app.models.audit_log import AuditLog
 from app.models.conversation import Conversation, Message
 from app.models.faq import FAQ
-from app.models.server_log import ServerLog
 from app.models.knowledge_gap import KnowledgeGap
-from app.models.audit_log import AuditLog
 from app.models.network_user import NetworkUser
+from app.models.server_log import ServerLog
+from app.models.user import User
 
 
 async def init_db():

@@ -1,13 +1,10 @@
 import axios from "axios";
 
-const API_URL =
-  window.__BOTIQ_API_URL__ ||
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:8002/api/v1";
+const API_URL = import.meta.env.VITE_API_URL || window.__BOTIQ_API_URL__ || "http://localhost:8002/api/v1";
 
-export const api = axios.create({
+const api = axios.create({
   baseURL: API_URL,
-  timeout: 60000,
+  timeout: 30000,
 });
 
 api.interceptors.request.use((config) => {
@@ -35,24 +32,46 @@ export const authAPI = {
     return api.post("/auth/login", form);
   },
   me: () => api.get("/auth/me"),
-  register: (data) => api.post("/auth/register", data),
 };
 
 export const chatAPI = {
   startSession: (data) => api.post("/chat/session/start", data),
+
   sendMessage: (message, sessionId, imageFile = null) => {
     const form = new FormData();
     form.append("message", message || "");
-    if (sessionId) form.append("session_id", sessionId);
+    form.append("session_id", sessionId);
     if (imageFile) form.append("image", imageFile);
     return api.post("/chat/message", form, {
       headers: { "Content-Type": "multipart/form-data" },
+      timeout: 60000,
     });
   },
+
   endSession: (sessionId) => api.post(`/chat/session/${sessionId}/end`),
+
   conversations: () => api.get("/chat/conversations"),
+
   conversationMessages: (id) => api.get(`/chat/conversations/${id}/messages`),
+
   adminConversationLogs: (params = {}) => api.get("/chat/admin/conversation-logs", { params }),
+};
+
+export const faqAPI = {
+  list: () => api.get("/employees/faqs"),
+  create: (data) => api.post("/employees/faqs", data),
+  update: (id, data) => api.put(`/employees/faqs/${id}`, data),
+  remove: (id) => api.delete(`/employees/faqs/${id}`),
+};
+
+export const supportAPI = {
+  sync: () => api.post("/support/sync-knowledge-base"),
+  status: () => api.get("/support/knowledge-base/status"),
+};
+
+export const serversAPI = {
+  status: () => api.get("/servers/status"),
+  analysis: () => api.get("/servers/analysis"),
 };
 
 export const dashboardAPI = {
@@ -65,18 +84,6 @@ export const dashboardAPI = {
   knowledgeGaps: (limit = 20, status = "open") =>
     api.get(`/dashboard/knowledge-gaps?limit=${limit}&status=${status}`),
   escalationRate: (days = 30) => api.get(`/dashboard/escalation-rate?days=${days}`),
-};
-
-export const supportAPI = {
-  sync: () => api.post("/support/sync-knowledge-base"),
-  status: () => api.get("/support/knowledge-base/status"),
-};
-
-export const faqAPI = {
-  list: () => api.get("/employees/faqs"),
-  create: (data) => api.post("/employees/faqs", data),
-  update: (id, data) => api.put(`/employees/faqs/${id}`, data),
-  remove: (id) => api.delete(`/employees/faqs/${id}`),
 };
 
 export const adminAPI = {

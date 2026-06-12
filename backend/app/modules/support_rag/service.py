@@ -1,38 +1,48 @@
-from typing import Optional, Dict, List
+from typing import Dict, List, Optional
+
 from app.core.config import settings
-from app.services.vertex.gemini_text_service import gemini_text_service
-from app.services.vertex.embeddings_service import embeddings_service
 from app.services.gdrive_service import gdrive_service
+from app.services.vertex.embeddings_service import embeddings_service
+from app.services.vertex.gemini_text_service import gemini_text_service
 
 RAG_SYSTEM = """Eres BOTIQ en modo Ingeniero de Soporte.
+
 Base de conocimiento disponible:
 {knowledge_context}
 
-Instrucciones:
-1. Responde SOLO usando el contexto anterior
-2. Cita las fuentes entre paréntesis
-3. Si el contexto no es suficiente, indícalo
-4. Pasos numerados para problemas técnicos
-5. Responde en español
+Alcance:
+- Procedimientos técnicos corporativos
+- Diagnóstico de aplicativos, URLs, servicios, certificados, red, servidores, backups y bases de datos
+- Guías internas indexadas desde Google Drive
+- Soporte a ingenieros para recordar pasos a seguir
+
+Reglas:
+1. Responde SOLO con base en el contexto y la información operativa interna recibida.
+2. Cita fuentes cuando uses documentos.
+3. Si el contexto no es suficiente, dilo claramente.
+4. Da pasos numerados y accionables.
+5. No respondas temas ajenos al negocio ni información no relacionada con IQ.
+6. Si se debe escalar, explica qué validaciones ya se deberían tener antes de crear ticket.
 """
 
 NO_KNOWLEDGE = (
-    "No encontré información suficiente en la base de conocimiento (confianza insuficiente).\n"
-    "Recomiendo:\n"
-    "1. Agregar documentación sobre este tema a la carpeta de Google Drive\n"
-    "2. Ejecutar /support/sync-knowledge-base para actualizar el índice\n"
-    "3. Escalar el caso a un especialista"
+    "No encontré información suficiente en la base de conocimiento corporativa.\n\n"
+    "Antes de escalar, recomiendo:\n"
+    "1. Confirmar URL/IP o aplicativo afectado.\n"
+    "2. Validar estado del servicio si existe en la API de estados.\n"
+    "3. Revisar error exacto, fecha/hora, usuario afectado y evidencia.\n"
+    "4. Agregar documentación sobre este tema a Google Drive si es recurrente."
 )
 
 
 class SupportRAGService:
-
     def __init__(self):
         self._collection = None
 
     def _get_collection(self):
         if self._collection is None:
             import chromadb
+
             client = chromadb.HttpClient(host=settings.CHROMA_HOST, port=settings.CHROMA_PORT)
             self._collection = client.get_or_create_collection(
                 name=settings.CHROMA_COLLECTION_NAME,
@@ -41,7 +51,6 @@ class SupportRAGService:
         return self._collection
 
     async def sync_knowledge_base(self) -> Dict:
-        """Sincroniza documentos desde Google Drive a ChromaDB."""
         from app.services.vertex.document_ai_service import document_ai_service
 
         if not gdrive_service.is_configured():
@@ -64,7 +73,6 @@ class SupportRAGService:
 
         for doc in documents:
             try:
-                # PDFs → Document AI para extracción precisa
                 if doc.get("doc_type") == "pdf" and doc.get("bytes"):
                     text = await document_ai_service.process_pdf(doc["bytes"])
                     if not text:
@@ -93,10 +101,11 @@ class SupportRAGService:
                             "total_chunks": len(chunks),
                         }],
                     )
+
                 print(f"✅ {doc['name']}: {len(chunks)} chunks indexados")
                 added += 1
-            except Exception as e:
-                print(f"❌ Error procesando {doc.get('name')}: {e}")
+            except Exception as exc:
+                print(f"❌ Error procesando {doc.get('name')}: {exc}")
                 errors += 1
 
         return {
@@ -113,12 +122,14 @@ class SupportRAGService:
             collection = self._get_collection()
             if collection.count() == 0:
                 return []
+
             emb = await embeddings_service.embed_text(query)
             results = collection.query(
                 query_embeddings=[emb],
                 n_results=min(top_k, collection.count()),
                 include=["documents", "metadatas", "distances"],
             )
+
             chunks = []
             if results["documents"] and results["documents"][0]:
                 for doc, meta, dist in zip(results["documents"][0], results["metadatas"][0], results["distances"][0]):
@@ -127,22 +138,31 @@ class SupportRAGService:
                         "source": meta.get("file_name", "Desconocido"),
                         "relevance_score": max(0.0, 1 - dist),
                     })
+
             chunks.sort(key=lambda x: x["relevance_score"], reverse=True)
             return chunks
-        except Exception as e:
-            print(f"ChromaDB error: {e}")
+        except Exception as exc:
+            print(f"ChromaDB error: {exc}")
             return []
 
-    async def generate_response(self, user_message: str, image_analysis: Optional[str] = None,
-                                history: Optional[List[Dict]] = None) -> Dict:
+    async def generate_response(
+        self,
+        user_message: str,
+        image_analysis: Optional[str] = None,
+        history: Optional[List[Dict]] = None,
+    ) -> Dict:
         q = f"{user_message}\nContexto visual: {image_analysis}" if image_analysis else user_message
         chunks = await self.retrieve_context(q)
         avg_conf = sum(c["relevance_score"] for c in chunks) / len(chunks) if chunks else 0.0
 
         if not chunks or avg_conf < settings.RAG_MIN_CONFIDENCE:
             return {
-                "text": NO_KNOWLEDGE, "sources": [], "avg_confidence": avg_conf,
-                "knowledge_gap": True, "tokens_used": 0, "response_time_ms": 0,
+                "text": NO_KNOWLEDGE,
+                "sources": [],
+                "avg_confidence": avg_conf,
+                "knowledge_gap": True,
+                "tokens_used": 0,
+                "response_time_ms": 0,
             }
 
         context = "\n\n---\n\n".join([f"[Fuente: {c['source']}]\n{c['content']}" for c in chunks])
@@ -153,6 +173,7 @@ class SupportRAGService:
             temperature=0.2,
             model=settings.VERTEX_REASONING_MODEL,
         )
+
         return {
             "text": result["text"],
             "tokens_used": result.get("tokens_used"),
@@ -164,7 +185,7 @@ class SupportRAGService:
 
     def _chunk_text(self, text: str, chunk_size: int = 500) -> List[str]:
         words = text.split()
-        return [" ".join(words[i:i+chunk_size]) for i in range(0, len(words), chunk_size) if words[i:i+chunk_size]]
+        return [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size) if words[i:i + chunk_size]]
 
 
 support_rag_service = SupportRAGService()
