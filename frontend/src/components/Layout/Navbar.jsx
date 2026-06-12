@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
+import BotiqLogo from "../Brand/BotiqLogo";
 
 const C = "#272163";
 
@@ -24,20 +25,20 @@ export default function Navbar({ currentPage = "chat" }) {
   return (
     <nav
       style={{
-        background: C,
-        minHeight: 56,
+        background: `linear-gradient(135deg, ${C}, #3a3490)`,
+        minHeight: 58,
         padding: "0 24px",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         gap: 16,
-        boxShadow: "0 2px 12px rgba(39,33,99,0.2)",
+        boxShadow: "0 2px 14px rgba(39,33,99,0.22)",
         position: "sticky",
         top: 0,
         zIndex: 100,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button
           onClick={() => nav(isAdmin ? "/dashboard" : "/chat")}
           style={{
@@ -47,45 +48,16 @@ export default function Navbar({ currentPage = "chat" }) {
             background: "transparent",
             border: "none",
             cursor: "pointer",
+            padding: 0,
           }}
         >
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              background: "rgba(255,255,255,0.15)",
-              borderRadius: 8,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 40 40" fill="none">
-              <path
-                d="M12 20 L20 12 L28 20 L20 28 Z"
-                fill="rgba(255,255,255,0.3)"
-                stroke="#fff"
-                strokeWidth="2"
-              />
-              <circle cx="20" cy="20" r="4" fill="#fff" />
-            </svg>
-          </div>
-          <span
-            style={{
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 16,
-              letterSpacing: "-0.3px",
-            }}
-          >
-            BOTIQ
-          </span>
+          <BotiqLogo variant="light" size="sm" />
         </button>
 
         {isDashboardArea && (
           <>
-            <span style={{ color: "rgba(255,255,255,0.3)" }}>/</span>
-            <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
+            <span style={{ color: "rgba(255,255,255,0.32)" }}>/</span>
+            <span style={{ color: "rgba(255,255,255,0.72)", fontSize: 13 }}>
               Administración
             </span>
           </>
@@ -116,23 +88,24 @@ export default function Navbar({ currentPage = "chat" }) {
 
         <span
           style={{
-            background: `${roleInfo.color}22`,
+            background: `${roleInfo.color}28`,
             color:
               roleInfo.color === "#7c3aed"
-                ? "#c4b5fd"
+                ? "#ddd6fe"
                 : roleInfo.color === "#0284c7"
-                ? "#7dd3fc"
-                : "#6ee7b7",
+                ? "#bae6fd"
+                : "#bbf7d0",
             fontSize: 11,
-            padding: "3px 10px",
-            borderRadius: 20,
-            fontWeight: 500,
+            padding: "4px 10px",
+            borderRadius: 999,
+            fontWeight: 700,
+            border: "1px solid rgba(255,255,255,0.12)",
           }}
         >
           {roleInfo.label}
         </span>
 
-        <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
+        <span style={{ color: "rgba(255,255,255,0.74)", fontSize: 13 }}>
           {user?.full_name?.split(" ")[0]}
         </span>
 
@@ -140,12 +113,12 @@ export default function Navbar({ currentPage = "chat" }) {
           onClick={logout}
           title="Cerrar sesión"
           style={{
-            background: "rgba(255,255,255,0.08)",
-            border: "1px solid rgba(255,255,255,0.15)",
-            color: "rgba(255,255,255,0.7)",
+            background: "rgba(255,255,255,0.09)",
+            border: "1px solid rgba(255,255,255,0.16)",
+            color: "rgba(255,255,255,0.78)",
             width: 32,
             height: 32,
-            borderRadius: 8,
+            borderRadius: 9,
             cursor: "pointer",
             fontSize: 15,
             display: "flex",
@@ -153,10 +126,10 @@ export default function Navbar({ currentPage = "chat" }) {
             justifyContent: "center",
             transition: "background 0.2s",
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.16)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.08)")}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.18)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.09)")}
         >
-          ⬡
+          ⎋
         </button>
       </div>
     </nav>
@@ -169,20 +142,28 @@ function NavBtn({ onClick, children, active = false }) {
       onClick={onClick}
       style={{
         background: active ? "rgba(255,255,255,0.26)" : "rgba(255,255,255,0.12)",
-        border: "1px solid rgba(255,255,255,0.2)",
+        border: "1px solid rgba(255,255,255,0.18)",
         color: "#fff",
-        padding: "6px 12px",
-        borderRadius: 7,
+        padding: "7px 12px",
+        borderRadius: 8,
         cursor: "pointer",
         fontSize: 12,
-        fontWeight: 500,
+        fontWeight: 650,
         display: "flex",
         alignItems: "center",
         gap: 5,
-        transition: "background 0.2s",
+        transition: "background 0.2s, transform 0.2s",
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.2)")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = active ? "rgba(255,255,255,0.26)" : "rgba(255,255,255,0.12)")}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "rgba(255,255,255,0.2)";
+        e.currentTarget.style.transform = "translateY(-1px)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = active
+          ? "rgba(255,255,255,0.26)"
+          : "rgba(255,255,255,0.12)";
+        e.currentTarget.style.transform = "translateY(0)";
+      }}
     >
       {children}
     </button>

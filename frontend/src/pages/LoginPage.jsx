@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import BotiqLogo from "../components/Brand/BotiqLogo";
+import BotiqAvatar from "../components/Brand/BotiqAvatar";
 
 const C = "#272163";
-const CD = "#1a1645";
 const CL = "#3a3490";
 
 export default function LoginPage() {
@@ -13,129 +14,293 @@ export default function LoginPage() {
   const { login, loading, error } = useAuth();
   const nav = useNavigate();
 
-  const submit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    try { const u = await login(email, pass); nav(u.role === "admin" ? "/dashboard" : "/chat"); }
-    catch {}
+
+    try {
+      const user = await login(email, pass);
+      nav(user.role === "admin" ? "/dashboard" : "/chat");
+    } catch {}
   };
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: `linear-gradient(135deg, ${C} 0%, ${CL} 50%, #6366f1 100%)`,
-      display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
-      position: "relative", overflow: "hidden",
-    }}>
-      {/* Fondo decorativo */}
-      <div style={{
-        position: "absolute", width: 400, height: 400, borderRadius: "50%",
-        background: "rgba(255,255,255,0.04)", top: -100, right: -100,
-      }} />
-      <div style={{
-        position: "absolute", width: 300, height: 300, borderRadius: "50%",
-        background: "rgba(255,255,255,0.03)", bottom: -80, left: -80,
-      }} />
-
-      <div style={{
-        background: "#fff", borderRadius: 20, padding: "40px 40px",
-        width: "100%", maxWidth: 420,
-        boxShadow: "0 24px 64px rgba(39,33,99,0.35)",
+    <div
+      style={{
+        minHeight: "100vh",
+        background:
+          "radial-gradient(circle at top left, rgba(79,70,229,0.32), transparent 34%), linear-gradient(135deg, #1a1645 0%, #272163 48%, #3a3490 100%)",
+        display: "grid",
+        placeItems: "center",
+        padding: 24,
         position: "relative",
-      }}>
-        {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{
-            width: 72, height: 72, background: C, borderRadius: 20,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            margin: "0 auto 16px",
-            boxShadow: `0 8px 24px rgba(39,33,99,0.3)`,
-          }}>
-            <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-              <circle cx="20" cy="20" r="18" stroke="rgba(255,255,255,0.3)" strokeWidth="2"/>
-              <path d="M12 20 L20 12 L28 20 L20 28 Z" fill="rgba(255,255,255,0.2)" stroke="#fff" strokeWidth="1.5"/>
-              <circle cx="20" cy="20" r="4" fill="#fff"/>
-              <path d="M20 8 L20 12 M20 28 L20 32 M8 20 L12 20 M28 20 L32 20" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: C, margin: 0, letterSpacing: "-0.5px" }}>
-            BOTIQ
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          width: 360,
+          height: 360,
+          borderRadius: "50%",
+          background: "rgba(255,255,255,0.06)",
+          right: -110,
+          top: -90,
+          filter: "blur(1px)",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          width: 240,
+          height: 240,
+          borderRadius: "50%",
+          background: "rgba(79,70,229,0.18)",
+          left: -70,
+          bottom: -60,
+        }}
+      />
+
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 980,
+          display: "grid",
+          gridTemplateColumns: "1.1fr 0.9fr",
+          gap: 28,
+          alignItems: "center",
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <section style={{ color: "#fff", padding: "20px 8px" }}>
+          <BotiqLogo variant="light" size="lg" showSubtitle />
+
+          <h1
+            style={{
+              marginTop: 34,
+              marginBottom: 14,
+              fontSize: "clamp(32px, 5vw, 54px)",
+              lineHeight: 1.05,
+              letterSpacing: "-1.6px",
+              fontWeight: 850,
+              maxWidth: 620,
+            }}
+          >
+            Soporte corporativo inteligente en un solo lugar.
           </h1>
-          <p style={{ color: "#6b6b8a", fontSize: 13, marginTop: 6 }}>
-            Asistente Corporativo Inteligente
-          </p>
-        </div>
 
-        <form onSubmit={submit}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-              Email corporativo
-            </label>
-            <input
-              type="email" value={email} onChange={e => setEmail(e.target.value)} required
-              placeholder="usuario@iq.com"
+          <p
+            style={{
+              maxWidth: 560,
+              color: "rgba(255,255,255,0.76)",
+              fontSize: 16,
+              lineHeight: 1.7,
+            }}
+          >
+            BOTIQ centraliza consultas de empleados, base de conocimiento RAG,
+            validación de servidores y métricas administrativas con IA.
+          </p>
+
+          <div
+            style={{
+              marginTop: 28,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+            }}
+          >
+            <Pill>💬 Chat interno</Pill>
+            <Pill>📚 RAG corporativo</Pill>
+            <Pill>🖥️ Servidores</Pill>
+            <Pill>📊 Dashboard</Pill>
+          </div>
+        </section>
+
+        <section
+          style={{
+            background: "rgba(255,255,255,0.96)",
+            border: "1px solid rgba(255,255,255,0.35)",
+            borderRadius: 24,
+            padding: "38px 34px",
+            boxShadow: "0 28px 80px rgba(0,0,0,0.28)",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div style={{ textAlign: "center", marginBottom: 30 }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+              <BotiqAvatar size={72} online />
+            </div>
+
+            <h2
               style={{
-                width: "100%", padding: "11px 14px", border: `1.5px solid #e2e1f0`,
-                borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box",
-                transition: "border-color 0.2s, box-shadow 0.2s", background: "#fafafa",
+                margin: 0,
+                color: C,
+                fontSize: 25,
+                fontWeight: 850,
+                letterSpacing: "-0.6px",
               }}
-              onFocus={e => { e.target.style.borderColor = C; e.target.style.boxShadow = `0 0 0 3px rgba(39,33,99,0.1)`; e.target.style.background = "#fff"; }}
-              onBlur={e => { e.target.style.borderColor = "#e2e1f0"; e.target.style.boxShadow = "none"; e.target.style.background = "#fafafa"; }}
-            />
+            >
+              Iniciar sesión
+            </h2>
+
+            <p style={{ marginTop: 7, color: "#6b6b8a", fontSize: 13 }}>
+              Accede con tu cuenta corporativa.
+            </p>
           </div>
 
-          <div style={{ marginBottom: 28 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-              Contraseña
-            </label>
-            <div style={{ position: "relative" }}>
+          <form onSubmit={handleSubmit}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={labelStyle}>Email corporativo</label>
               <input
-                type={show ? "text" : "password"} value={pass} onChange={e => setPass(e.target.value)} required
-                placeholder="••••••••"
-                style={{
-                  width: "100%", padding: "11px 44px 11px 14px", border: `1.5px solid #e2e1f0`,
-                  borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box",
-                  transition: "border-color 0.2s, box-shadow 0.2s", background: "#fafafa",
-                }}
-                onFocus={e => { e.target.style.borderColor = C; e.target.style.boxShadow = `0 0 0 3px rgba(39,33,99,0.1)`; e.target.style.background = "#fff"; }}
-                onBlur={e => { e.target.style.borderColor = "#e2e1f0"; e.target.style.boxShadow = "none"; e.target.style.background = "#fafafa"; }}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="usuario@empresa.com"
+                style={inputStyle}
+                onFocus={focusInput}
+                onBlur={blurInput}
               />
-              <button type="button" onClick={() => setShow(v => !v)} style={{
-                position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-                background: "none", border: "none", cursor: "pointer", color: "#9CA3AF", fontSize: 16,
-              }}>
-                {show ? "🙈" : "👁"}
-              </button>
             </div>
-          </div>
 
-          {error && (
-            <div style={{
-              background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8,
-              padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "#dc2626",
-              display: "flex", alignItems: "center", gap: 8,
-            }}>
-              ⚠️ {error}
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>Contraseña</label>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={show ? "text" : "password"}
+                  value={pass}
+                  onChange={(e) => setPass(e.target.value)}
+                  required
+                  placeholder="Tu contraseña"
+                  style={{ ...inputStyle, paddingRight: 48 }}
+                  onFocus={focusInput}
+                  onBlur={blurInput}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShow((value) => !value)}
+                  style={{
+                    position: "absolute",
+                    right: 12,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "transparent",
+                    border: "none",
+                    color: "#6b6b8a",
+                    cursor: "pointer",
+                    fontSize: 16,
+                  }}
+                  title={show ? "Ocultar contraseña" : "Ver contraseña"}
+                >
+                  {show ? "🙈" : "👁️"}
+                </button>
+              </div>
             </div>
-          )}
 
-          <button type="submit" disabled={loading} style={{
-            width: "100%", padding: "13px",
-            background: loading ? "#9CA3AF" : `linear-gradient(135deg, ${C}, ${CL})`,
-            color: "#fff", border: "none", borderRadius: 10,
-            fontSize: 15, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer",
-            boxShadow: loading ? "none" : `0 4px 16px rgba(39,33,99,0.3)`,
-            transition: "all 0.2s", letterSpacing: "0.3px",
-          }}>
-            {loading ? "Ingresando..." : "Ingresar →"}
-          </button>
-        </form>
+            {error && (
+              <div
+                style={{
+                  background: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  color: "#991b1b",
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                  fontSize: 13,
+                  marginBottom: 16,
+                }}
+              >
+                ⚠️ {error}
+              </div>
+            )}
 
-        <div style={{ textAlign: "center", marginTop: 24 }}>
-          <p style={{ color: "#9CA3AF", fontSize: 11 }}>
-            IQ Corporation · Powered by Vertex AI
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                width: "100%",
+                border: "none",
+                borderRadius: 12,
+                padding: "13px 16px",
+                background: loading
+                  ? "#9ca3af"
+                  : `linear-gradient(135deg, ${C}, ${CL})`,
+                color: "#fff",
+                fontWeight: 750,
+                fontSize: 15,
+                cursor: loading ? "not-allowed" : "pointer",
+                boxShadow: loading ? "none" : `0 8px 22px ${C}3d`,
+                transition: "all 0.2s ease",
+              }}
+            >
+              {loading ? "Ingresando..." : "Ingresar a BOTIQ →"}
+            </button>
+          </form>
+
+          <p
+            style={{
+              textAlign: "center",
+              color: "#9ca3af",
+              fontSize: 11,
+              marginTop: 24,
+            }}
+          >
+            IQ Corporation · Vertex AI · ChromaDB · React · FastAPI
           </p>
-        </div>
+        </section>
       </div>
     </div>
   );
+}
+
+function Pill({ children }) {
+  return (
+    <span
+      style={{
+        background: "rgba(255,255,255,0.1)",
+        border: "1px solid rgba(255,255,255,0.18)",
+        color: "rgba(255,255,255,0.86)",
+        padding: "8px 12px",
+        borderRadius: 999,
+        fontSize: 13,
+        fontWeight: 600,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+const labelStyle = {
+  display: "block",
+  color: "#374151",
+  fontSize: 12,
+  fontWeight: 700,
+  marginBottom: 7,
+};
+
+const inputStyle = {
+  width: "100%",
+  border: "1.5px solid #e2e1f0",
+  borderRadius: 11,
+  padding: "11px 14px",
+  background: "#fafafa",
+  outline: "none",
+  color: "#1a1a2e",
+  fontSize: 14,
+  transition: "border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease",
+  boxSizing: "border-box",
+};
+
+function focusInput(e) {
+  e.target.style.borderColor = C;
+  e.target.style.boxShadow = `0 0 0 4px ${C}14`;
+  e.target.style.background = "#fff";
+}
+
+function blurInput(e) {
+  e.target.style.borderColor = "#e2e1f0";
+  e.target.style.boxShadow = "none";
+  e.target.style.background = "#fafafa";
 }

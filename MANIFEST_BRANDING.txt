@@ -1,0 +1,12 @@
+Archivos completos de branding BOTIQ
+
+frontend/src/components/Brand/BotiqBotIcon.jsx
+frontend/src/components/Brand/BotiqLogo.jsx
+frontend/src/components/Brand/BotiqAvatar.jsx
+frontend/public/favicon.svg
+frontend/src/pages/LoginPage.jsx
+frontend/src/components/Layout/Navbar.jsx
+frontend/src/pages/ChatPage.jsx
+frontend/src/components/ChatWidget/index.jsx
+frontend/index.html
+frontend/src/assets/brand/README.md
