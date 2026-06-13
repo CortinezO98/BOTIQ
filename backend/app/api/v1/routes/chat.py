@@ -1,9 +1,12 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 import base64
+import csv
+import io
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -207,16 +210,32 @@ async def get_conversation_messages(
     return messages.scalars().all()
 
 
-@router.get("/admin/conversation-logs", response_model=List[AdminConversationLogItem])
-async def admin_conversation_logs(
-    user_id: Optional[uuid.UUID] = Query(None),
-    selected_profile: Optional[str] = Query(None),
-    session_status: Optional[str] = Query(None),
-    q: Optional[str] = Query(None),
-    limit: int = Query(100, ge=1, le=500),
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
-):
+def _normalize_date_range(date_from: Optional[datetime], date_to: Optional[datetime]):
+    """Normaliza fechas de filtros: asegura tz UTC y hace date_to inclusivo (fin de día)."""
+    if date_from and date_from.tzinfo is None:
+        date_from = date_from.replace(tzinfo=timezone.utc)
+    if date_to:
+        if date_to.tzinfo is None:
+            date_to = date_to.replace(tzinfo=timezone.utc)
+        # Si viene solo la fecha (00:00), incluir todo el día.
+        if date_to.hour == 0 and date_to.minute == 0 and date_to.second == 0:
+            date_to = date_to + timedelta(days=1)
+    return date_from, date_to
+
+
+async def _fetch_admin_logs(
+    db: AsyncSession,
+    user_id: Optional[uuid.UUID],
+    selected_profile: Optional[str],
+    session_status: Optional[str],
+    q: Optional[str],
+    date_from: Optional[datetime],
+    date_to: Optional[datetime],
+    limit: int,
+) -> List[AdminConversationLogItem]:
+    """Lógica compartida entre el listado de logs y la exportación CSV."""
+    date_from, date_to = _normalize_date_range(date_from, date_to)
+
     stmt = (
         select(Conversation)
         .options(selectinload(Conversation.user), selectinload(Conversation.messages))
@@ -230,11 +249,15 @@ async def admin_conversation_logs(
         stmt = stmt.where(Conversation.selected_profile == selected_profile)
     if session_status:
         stmt = stmt.where(Conversation.session_status == session_status)
+    if date_from:
+        stmt = stmt.where(Conversation.created_at >= date_from)
+    if date_to:
+        stmt = stmt.where(Conversation.created_at < date_to)
 
     result = await db.execute(stmt)
     conversations = result.scalars().unique().all()
 
-    rows = []
+    rows: List[AdminConversationLogItem] = []
     q_norm = (q or "").lower().strip()
 
     for conv in conversations:
@@ -244,7 +267,20 @@ async def admin_conversation_logs(
         ]
         all_text = " ".join(user_messages).lower()
 
-        if q_norm and q_norm not in all_text and q_norm not in (conv.user.email if conv.user else "").lower():
+        haystack = " ".join(
+            filter(
+                None,
+                [
+                    all_text,
+                    (conv.user.email if conv.user else "").lower(),
+                    (conv.user.full_name if conv.user else "").lower(),
+                    (conv.detected_url or "").lower(),
+                    (conv.detected_ip or "").lower(),
+                    (conv.aranda_ticket_id or "").lower(),
+                ],
+            )
+        )
+        if q_norm and q_norm not in haystack:
             continue
 
         last_msg = user_messages[-1][:255] if user_messages else None
@@ -278,6 +314,140 @@ async def admin_conversation_logs(
         )
 
     return rows
+
+
+@router.get("/admin/conversation-logs", response_model=List[AdminConversationLogItem])
+async def admin_conversation_logs(
+    user_id: Optional[uuid.UUID] = Query(None),
+    selected_profile: Optional[str] = Query(None),
+    session_status: Optional[str] = Query(None),
+    q: Optional[str] = Query(None),
+    date_from: Optional[datetime] = Query(None),
+    date_to: Optional[datetime] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    return await _fetch_admin_logs(db, user_id, selected_profile, session_status, q, date_from, date_to, limit)
+
+
+@router.get("/admin/conversation-logs/export")
+async def admin_conversation_logs_export(
+    user_id: Optional[uuid.UUID] = Query(None),
+    selected_profile: Optional[str] = Query(None),
+    session_status: Optional[str] = Query(None),
+    q: Optional[str] = Query(None),
+    date_from: Optional[datetime] = Query(None),
+    date_to: Optional[datetime] = Query(None),
+    limit: int = Query(500, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Reportería: exporta los logs de conversaciones filtrados como CSV (compatible con Excel)."""
+    rows = await _fetch_admin_logs(db, user_id, selected_profile, session_status, q, date_from, date_to, limit)
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=";")
+    writer.writerow(
+        [
+            "conversation_id",
+            "fecha_inicio",
+            "fecha_fin",
+            "usuario",
+            "correo",
+            "perfil",
+            "modulo",
+            "estado_sesion",
+            "motivo_fin",
+            "preguntas",
+            "fuera_de_alcance",
+            "intentos_solucion",
+            "usuario_red",
+            "red_validado",
+            "url_detectada",
+            "ip_detectada",
+            "ticket_elegible",
+            "escalado_aranda",
+            "ticket_aranda_id",
+            "ticket_aranda_estado",
+            "ultima_consulta",
+        ]
+    )
+    for r in rows:
+        writer.writerow(
+            [
+                str(r.id),
+                r.created_at.isoformat() if r.created_at else "",
+                r.ended_at.isoformat() if r.ended_at else "",
+                r.user_full_name,
+                r.user_email,
+                r.selected_profile or "",
+                r.module.value if r.module else "",
+                r.session_status,
+                r.ended_reason or "",
+                r.question_count,
+                r.out_of_scope_count,
+                r.resolution_attempts,
+                r.support_network_username or "",
+                "si" if r.support_network_validated else "no",
+                r.detected_url or "",
+                r.detected_ip or "",
+                "si" if r.ticket_eligible else "no",
+                "si" if r.escalated_to_aranda else "no",
+                r.aranda_ticket_id or "",
+                r.aranda_ticket_status or "",
+                (r.last_message or "").replace("\n", " ").replace("\r", " "),
+            ]
+        )
+
+    await audit_service.log(
+        db,
+        "conversation_logs_exported",
+        current_user.id,
+        "reports",
+        {"rows": len(rows), "filters": {"selected_profile": selected_profile, "session_status": session_status, "q": q}},
+    )
+    await db.commit()
+
+    filename = f"botiq_conversation_logs_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    # BOM utf-8-sig para que Excel detecte la codificación correctamente.
+    csv_bytes = ("\ufeff" + buffer.getvalue()).encode("utf-8")
+
+    return StreamingResponse(
+        io.BytesIO(csv_bytes),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/admin/conversation-logs/{conversation_id}/messages", response_model=List[MessageItem])
+async def admin_conversation_messages(
+    conversation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Permite al administrador ver la conversación completa de cualquier usuario (auditoría)."""
+    result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
+    conversation = result.scalar_one_or_none()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada")
+
+    messages = await db.execute(
+        select(Message)
+        .where(Message.conversation_id == conversation_id)
+        .order_by(Message.created_at.asc())
+    )
+
+    await audit_service.log(
+        db,
+        "admin_conversation_viewed",
+        current_user.id,
+        "reports",
+        {"conversation_id": str(conversation_id)},
+    )
+    await db.commit()
+
+    return messages.scalars().all()
 
 
 @router.post("/message", response_model=ChatMessageResponse)

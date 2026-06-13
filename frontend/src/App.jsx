@@ -7,6 +7,7 @@ import DashboardPage from "./pages/DashboardPage";
 import FaqsPage from "./pages/FaqsPage";
 import KnowledgeBasePage from "./pages/KnowledgeBasePage";
 import LoginPage from "./pages/LoginPage";
+import ReportsPage from "./pages/ReportsPage";
 import UsersPage from "./pages/UsersPage";
 
 const C = "#272163";
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="/dashboard/faqs" element={<Guard adminOnly><FaqsPage /></Guard>} />
         <Route path="/dashboard/knowledge-base" element={<Guard adminOnly><KnowledgeBasePage /></Guard>} />
         <Route path="/dashboard/conversation-logs" element={<Guard adminOnly><ConversationLogsPage /></Guard>} />
+        <Route path="/dashboard/reports" element={<Guard adminOnly><ReportsPage /></Guard>} />
 
         <Route path="*" element={<Navigate to="/chat" replace />} />
       </Routes>

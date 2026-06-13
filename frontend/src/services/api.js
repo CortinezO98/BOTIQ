@@ -55,6 +55,12 @@ export const chatAPI = {
   conversationMessages: (id) => api.get(`/chat/conversations/${id}/messages`),
 
   adminConversationLogs: (params = {}) => api.get("/chat/admin/conversation-logs", { params }),
+
+  adminConversationMessages: (conversationId) =>
+    api.get(`/chat/admin/conversation-logs/${conversationId}/messages`),
+
+  adminConversationLogsExport: (params = {}) =>
+    api.get("/chat/admin/conversation-logs/export", { params, responseType: "blob", timeout: 60000 }),
 };
 
 export const faqAPI = {
@@ -99,6 +105,30 @@ export const adminAPI = {
   updateNetworkUser: (id, data) => api.put(`/admin/network-users/${id}`, data),
 };
 
+// --- Utilidades de reportería ---
+
+export function downloadBlob(blob, filename) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export function downloadCsvFromRows(rows, filename) {
+  // rows: array de objetos planos. Separador ";" + BOM para compatibilidad con Excel.
+  if (!rows || rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  const escape = (value) => {
+    const s = String(value ?? "");
+    return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [headers.join(";"), ...rows.map((r) => headers.map((h) => escape(r[h])).join(";"))];
+  const blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  downloadBlob(blob, filename);
+}
+
 export default api;
-
-
