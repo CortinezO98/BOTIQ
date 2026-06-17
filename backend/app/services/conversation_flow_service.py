@@ -51,6 +51,13 @@ class ConversationFlowService:
     IP_REGEX = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
     GREETINGS = {"hola", "buenas", "buenos dias", "buenos días", "buenas tardes", "buenas noches", "ayuda", "soporte"}
+    # Mensajes de cierre/cortesía: no necesitan FAQ/RAG/Gemini, pero antes
+    # pasaban por el flujo completo igual que una pregunta técnica real
+    # (~1800 tokens y ~10s solo para responder "de nada"). Se detectan por
+    # contener una de estas palabras Y ser mensajes cortos, para no atrapar
+    # por accidente un mensaje largo que solo menciona "gracias" de pasada.
+    THANKS_KW = ["gracias", "thank you", "thanks", "muy amable"]
+    THANKS_MAX_CHARS = 60
     CONFIRMATIONS = {"si", "sí", "claro", "correcto", "confirmo", "dale", "ok", "de acuerdo", "continua", "continúa"}
     NEGATIONS = {"no", "negativo", "aun no", "aún no", "todavia no", "todavía no", "no funciono", "no funcionó", "sigue igual"}
 
@@ -109,6 +116,9 @@ class ConversationFlowService:
 
         if lower in self.GREETINGS:
             return self._welcome_decision(conversation.selected_profile or "employee")
+
+        if len(msg) <= self.THANKS_MAX_CHARS and any(k in lower for k in self.THANKS_KW):
+            return self._closing_decision(conversation.selected_profile or "employee")
 
         if lower in self.CONFIRMATIONS and previous_case.get("pending_ticket_confirmation"):
             return FlowDecision(
@@ -313,6 +323,21 @@ class ConversationFlowService:
         return FlowDecision(
             intent="greeting",
             case_type="welcome",
+            confidence=1.0,
+            direct_response=text,
+            should_call_faq=False,
+            should_call_rag=False,
+            should_check_status=False,
+        )
+
+    def _closing_decision(self, profile: str) -> FlowDecision:
+        if profile == "support_engineer":
+            text = "Con gusto. Si surge otro caso o necesitas validar algo más, aquí estoy."
+        else:
+            text = "¡Con gusto! Si tienes otra duda o problema, aquí estoy para ayudarte."
+        return FlowDecision(
+            intent="closing",
+            case_type="closing",
             confidence=1.0,
             direct_response=text,
             should_call_faq=False,
