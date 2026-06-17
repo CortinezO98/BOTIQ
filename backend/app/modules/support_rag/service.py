@@ -1,6 +1,12 @@
+import hashlib
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
+from app.models.knowledge_document import KnowledgeDocument
 from app.services.gdrive_service import gdrive_service
 from app.services.vertex.embeddings_service import embeddings_service
 from app.services.vertex.gemini_text_service import gemini_text_service
@@ -50,71 +56,250 @@ class SupportRAGService:
             )
         return self._collection
 
-    async def sync_knowledge_base(self) -> Dict:
+    # ──────────────────────────────────────────────────────────────────
+    #  Extracción de texto y utilidades
+    # ──────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _hash_text(text: str) -> str:
+        return hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()
+
+    async def _extract_text(self, doc: Dict) -> str:
+        """Devuelve el texto de un documento (procesa PDF con Document AI)."""
         from app.services.vertex.document_ai_service import document_ai_service
 
+        if doc.get("doc_type") == "pdf" and doc.get("bytes"):
+            text = await document_ai_service.process_pdf(doc["bytes"])
+            if not text:
+                text = doc.get("content", "")
+            return text
+        return doc.get("content", "")
+
+    def _delete_chunks_for_file(self, collection, file_id: str):
+        """Elimina de ChromaDB todos los chunks de un documento (por metadata)."""
+        try:
+            collection.delete(where={"file_id": file_id})
+        except Exception as exc:  # noqa: BLE001
+            print(f"⚠️  No se pudieron borrar chunks previos de {file_id}: {exc}")
+
+    async def _index_document(self, collection, doc: Dict, text: str) -> int:
+        """Crea embeddings y hace upsert de los chunks de un documento. Devuelve nº de chunks."""
+        chunks = self._chunk_text(text)
+        # Limpia versiones anteriores antes de reindexar (evita chunks huérfanos).
+        self._delete_chunks_for_file(collection, doc["file_id"])
+
+        for i, chunk in enumerate(chunks):
+            chunk_id = f"{doc['file_id']}_chunk_{i}"
+            embedding = await embeddings_service.embed_text(chunk)
+            collection.upsert(
+                ids=[chunk_id],
+                embeddings=[embedding],
+                documents=[chunk],
+                metadatas=[{
+                    "file_id": doc["file_id"],
+                    "file_name": doc["name"],
+                    "doc_type": doc.get("doc_type", ""),
+                    "modified_at": doc.get("modified_at", ""),
+                    "chunk_index": i,
+                    "total_chunks": len(chunks),
+                }],
+            )
+        return len(chunks)
+
+    # ──────────────────────────────────────────────────────────────────
+    #  Sincronización incremental
+    # ──────────────────────────────────────────────────────────────────
+
+    async def sync_knowledge_base(self, db: AsyncSession, force: bool = False) -> Dict:
+        """
+        Sincroniza la base de conocimiento desde Google Drive de forma INCREMENTAL.
+
+        - Procesa solo documentos nuevos o cuyo contenido cambió (hash distinto),
+          salvo que force=True (reindexa todo).
+        - Marca como 'skipped' los que no cambiaron (sin gastar embeddings).
+        - Elimina de ChromaDB y de la tabla los documentos que ya no están en Drive.
+        - Guarda estado, nº de chunks y errores por documento en knowledge_documents.
+        """
         if not gdrive_service.is_configured():
             return {
                 "status": "error",
-                "message": "Google Drive no configurado. Verifica GDRIVE_FOLDER_ID y service-account.json",
+                "message": "Google Drive no configurado. Verifica GDRIVE_FOLDER_ID / GDRIVE_FOLDER_IDS y service-account.json",
                 "documents_processed": 0,
             }
 
         documents = await gdrive_service.get_all_documents_content_with_type()
-        if not documents:
-            return {
-                "status": "empty",
-                "message": "No se encontraron documentos en la carpeta de Google Drive",
-                "documents_processed": 0,
-            }
-
         collection = self._get_collection()
-        added, errors = 0, 0
+
+        # Índice de registros existentes por file_id.
+        existing_rows = (await db.execute(select(KnowledgeDocument))).scalars().all()
+        by_file = {row.file_id: row for row in existing_rows}
+        drive_file_ids = set()
+
+        indexed, updated, skipped, errors = 0, 0, 0, 0
 
         for doc in documents:
-            try:
-                if doc.get("doc_type") == "pdf" and doc.get("bytes"):
-                    text = await document_ai_service.process_pdf(doc["bytes"])
-                    if not text:
-                        text = doc.get("content", "")
-                else:
-                    text = doc.get("content", "")
+            file_id = doc["file_id"]
+            drive_file_ids.add(file_id)
+            row = by_file.get(file_id)
 
+            try:
+                text = await self._extract_text(doc)
                 if not text.strip():
                     print(f"⚠️  {doc['name']}: sin contenido extraíble")
+                    self._upsert_doc_record(
+                        db, row, doc, content_hash=None, chunk_count=0,
+                        status="failed", error="Sin contenido extraíble",
+                    )
+                    errors += 1
                     continue
 
-                chunks = self._chunk_text(text)
-                for i, chunk in enumerate(chunks):
-                    chunk_id = f"{doc['file_id']}_chunk_{i}"
-                    embedding = await embeddings_service.embed_text(chunk)
-                    collection.upsert(
-                        ids=[chunk_id],
-                        embeddings=[embedding],
-                        documents=[chunk],
-                        metadatas=[{
-                            "file_id": doc["file_id"],
-                            "file_name": doc["name"],
-                            "doc_type": doc.get("doc_type", ""),
-                            "modified_at": doc.get("modified_at", ""),
-                            "chunk_index": i,
-                            "total_chunks": len(chunks),
-                        }],
-                    )
+                new_hash = self._hash_text(text)
+                unchanged = (
+                    row is not None
+                    and row.status == "indexed"
+                    and row.content_hash == new_hash
+                )
 
-                print(f"✅ {doc['name']}: {len(chunks)} chunks indexados")
-                added += 1
-            except Exception as exc:
+                if unchanged and not force:
+                    # No cambió: no se reindexa (ahorra embeddings).
+                    self._touch_doc_record(row, status="indexed")
+                    skipped += 1
+                    print(f"⏭️  {doc['name']}: sin cambios, omitido")
+                    continue
+
+                chunk_count = await self._index_document(collection, doc, text)
+                self._upsert_doc_record(
+                    db, row, doc, content_hash=new_hash, chunk_count=chunk_count,
+                    status="indexed", error=None, mark_indexed=True,
+                )
+                if row is None:
+                    indexed += 1
+                    print(f"✅ {doc['name']}: {chunk_count} chunks indexados (nuevo)")
+                else:
+                    updated += 1
+                    print(f"♻️  {doc['name']}: {chunk_count} chunks reindexados")
+
+            except Exception as exc:  # noqa: BLE001
                 print(f"❌ Error procesando {doc.get('name')}: {exc}")
+                self._upsert_doc_record(
+                    db, row, doc, content_hash=None, chunk_count=(row.chunk_count if row else 0),
+                    status="failed", error=str(exc),
+                )
                 errors += 1
+
+        # Documentos que estaban indexados pero ya NO están en Drive → eliminar.
+        removed = 0
+        for file_id, row in by_file.items():
+            if file_id not in drive_file_ids:
+                self._delete_chunks_for_file(collection, file_id)
+                await db.delete(row)
+                removed += 1
+                print(f"🗑️  {row.file_name}: eliminado (ya no está en Drive)")
+
+        await db.commit()
 
         return {
             "status": "success",
-            "documents_processed": len(documents),
-            "documents_added": added,
+            "mode": "full" if force else "incremental",
+            "documents_in_drive": len(documents),
+            "indexed_new": indexed,
+            "reindexed": updated,
+            "skipped_unchanged": skipped,
+            "removed": removed,
             "errors": errors,
-            "total_chunks": self._get_collection().count(),
+            "total_chunks": collection.count(),
         }
+
+    async def reindex_document(self, db: AsyncSession, file_id: str) -> Dict:
+        """Reindexa un único documento por su file_id (botón 'reindexar' del frontend)."""
+        if not gdrive_service.is_configured():
+            return {"status": "error", "message": "Google Drive no configurado"}
+
+        documents = await gdrive_service.get_all_documents_content_with_type()
+        doc = next((d for d in documents if d["file_id"] == file_id), None)
+        if not doc:
+            return {"status": "not_found", "message": "Documento no encontrado en Drive"}
+
+        collection = self._get_collection()
+        row = (
+            await db.execute(select(KnowledgeDocument).where(KnowledgeDocument.file_id == file_id))
+        ).scalar_one_or_none()
+
+        try:
+            text = await self._extract_text(doc)
+            if not text.strip():
+                self._upsert_doc_record(db, row, doc, content_hash=None, chunk_count=0, status="failed", error="Sin contenido extraíble")
+                await db.commit()
+                return {"status": "failed", "message": "Sin contenido extraíble"}
+
+            chunk_count = await self._index_document(collection, doc, text)
+            self._upsert_doc_record(
+                db, row, doc, content_hash=self._hash_text(text), chunk_count=chunk_count,
+                status="indexed", error=None, mark_indexed=True,
+            )
+            await db.commit()
+            return {"status": "indexed", "file_name": doc["name"], "chunk_count": chunk_count, "total_chunks": collection.count()}
+        except Exception as exc:  # noqa: BLE001
+            self._upsert_doc_record(db, row, doc, content_hash=None, chunk_count=(row.chunk_count if row else 0), status="failed", error=str(exc))
+            await db.commit()
+            return {"status": "failed", "message": str(exc)}
+
+    async def list_documents(self, db: AsyncSession) -> List[Dict]:
+        """Lista los documentos registrados con su estado, para el frontend."""
+        rows = (
+            await db.execute(select(KnowledgeDocument).order_by(KnowledgeDocument.file_name))
+        ).scalars().all()
+        return [
+            {
+                "file_id": r.file_id,
+                "file_name": r.file_name,
+                "doc_type": r.doc_type,
+                "chunk_count": r.chunk_count or 0,
+                "status": r.status,
+                "error_message": r.error_message,
+                "drive_modified_at": r.drive_modified_at,
+                "last_indexed_at": r.last_indexed_at.isoformat() if r.last_indexed_at else None,
+            }
+            for r in rows
+        ]
+
+    # ── Helpers de persistencia del registro por documento ──────────────
+
+    def _upsert_doc_record(
+        self,
+        db: AsyncSession,
+        row: Optional[KnowledgeDocument],
+        doc: Dict,
+        content_hash: Optional[str],
+        chunk_count: int,
+        status: str,
+        error: Optional[str],
+        mark_indexed: bool = False,
+    ):
+        now = datetime.now(timezone.utc)
+        if row is None:
+            row = KnowledgeDocument(file_id=doc["file_id"])
+            db.add(row)
+        row.file_name = doc["name"]
+        row.doc_type = doc.get("doc_type")
+        row.mime_type = doc.get("mime_type")
+        row.drive_modified_at = doc.get("modified_at")
+        row.content_hash = content_hash if content_hash is not None else row.content_hash
+        row.chunk_count = chunk_count
+        row.status = status
+        row.error_message = error
+        if mark_indexed:
+            row.last_indexed_at = now
+        row.updated_at = now
+
+    @staticmethod
+    def _touch_doc_record(row: KnowledgeDocument, status: str):
+        row.status = status
+        row.updated_at = datetime.now(timezone.utc)
+
+    # ──────────────────────────────────────────────────────────────────
+    #  Recuperación y generación (sin cambios de comportamiento)
+    # ──────────────────────────────────────────────────────────────────
 
     async def retrieve_context(self, query: str, top_k: int = None) -> List[Dict]:
         top_k = top_k or settings.RAG_TOP_K
@@ -141,7 +326,7 @@ class SupportRAGService:
 
             chunks.sort(key=lambda x: x["relevance_score"], reverse=True)
             return chunks
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             print(f"ChromaDB error: {exc}")
             return []
 

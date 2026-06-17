@@ -16,6 +16,7 @@ from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.conversation import Conversation, Message  # noqa: F401
 from app.models.faq import FAQ  # noqa: F401
 from app.models.knowledge_gap import KnowledgeGap  # noqa: F401
+from app.models.knowledge_document import KnowledgeDocument  # noqa: F401
 from app.models.network_user import NetworkUser  # noqa: F401
 from app.models.server_log import ServerLog  # noqa: F401
 from app.models.user import User  # noqa: F401

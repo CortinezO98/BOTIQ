@@ -71,8 +71,11 @@ export const faqAPI = {
 };
 
 export const supportAPI = {
-  sync: () => api.post("/support/sync-knowledge-base"),
+  sync: (force = false) => api.post(`/support/sync-knowledge-base?force=${force}`),
   status: () => api.get("/support/knowledge-base/status"),
+  documents: () => api.get("/support/knowledge-base/documents"),
+  reindexDocument: (fileId) =>
+    api.post(`/support/knowledge-base/documents/${fileId}/reindex`, null, { timeout: 120000 }),
 };
 
 export const serversAPI = {
