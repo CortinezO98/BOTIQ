@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     DOCUMENT_AI_LOCATION: str = "us"
 
     GDRIVE_FOLDER_ID: str = ""
+    # Múltiples carpetas raíz separadas por coma. Cada una se recorre de forma
+    # recursiva. Útil cuando hay carpetas en "Compartido conmigo" con distintos
+    # propietarios. GDRIVE_FOLDER_ID (singular) se mantiene por compatibilidad.
+    GDRIVE_FOLDER_IDS: str = ""
     GCS_BUCKET_NAME: str = "botiq-images-bucket"
 
     CHROMA_HOST: str = "chromadb"
@@ -93,6 +97,20 @@ class Settings(BaseSettings):
 
     def get_allowed_origins(self) -> List[str]:
         return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+
+    def get_gdrive_folder_ids(self) -> List[str]:
+        """
+        Lista de carpetas raíz de Drive a indexar (sin duplicados, en orden).
+        Combina GDRIVE_FOLDER_ID (singular, compat) y GDRIVE_FOLDER_IDS (lista).
+        """
+        ids: List[str] = []
+        if self.GDRIVE_FOLDER_ID.strip():
+            ids.append(self.GDRIVE_FOLDER_ID.strip())
+        for raw in self.GDRIVE_FOLDER_IDS.split(","):
+            fid = raw.strip()
+            if fid and fid not in ids:
+                ids.append(fid)
+        return ids
 
     def get_support_allowed_domains(self) -> List[str]:
         return [d.strip().lower() for d in self.SUPPORT_ALLOWED_EMAIL_DOMAINS.split(",") if d.strip()]

@@ -26,13 +26,17 @@ async def sync_kb(bg: BackgroundTasks, _: User = Depends(require_support)):
 
 @router.get("/knowledge-base/status")
 async def kb_status(_: User = Depends(require_support)):
+    from app.core.config import settings
+
     try:
         col = support_rag_service._get_collection()
+        folder_ids = settings.get_gdrive_folder_ids()
         return {
             "status": "active",
             "total_chunks": col.count(),
             "drive_configured": gdrive_service.is_configured(),
-            "drive_folder_id": __import__('app.core.config', fromlist=['settings']).settings.GDRIVE_FOLDER_ID or "No configurado",
+            "drive_folder_count": len(folder_ids),
+            "drive_folder_ids": folder_ids or ["No configurado"],
         }
     except Exception as e:
         return {"status": "error", "detail": str(e)}

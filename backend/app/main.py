@@ -12,7 +12,7 @@ from app.core.config import settings
 async def lifespan(app: FastAPI):
     print(f"✅ {settings.APP_NAME} v{settings.APP_VERSION} iniciado [{settings.ENVIRONMENT}]")
     print(f"   GCP: {settings.GCP_PROJECT_ID or 'NO CONFIGURADO — modo demo'}")
-    print(f"   Drive: {settings.GDRIVE_FOLDER_ID or 'NO CONFIGURADO'}")
+    print(f"   Drive: {len(settings.get_gdrive_folder_ids())} carpeta(s) configurada(s)")
     yield
     print(f"🛑 {settings.APP_NAME} detenido")
 
