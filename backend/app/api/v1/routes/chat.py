@@ -263,6 +263,11 @@ async def _apply_web_fallback(
     - registra automáticamente una sugerencia en web_knowledge_cache con estado pending.
     """
     if not bot_result.get("knowledge_gap") or not settings.WEB_SEARCH_ENABLED:
+        if settings.DEBUG:
+            print(
+                f"[WEB_FALLBACK] no ejecutado | knowledge_gap={bot_result.get('knowledge_gap')} "
+                f"WEB_SEARCH_ENABLED={settings.WEB_SEARCH_ENABLED}"
+            )
         return bot_result
 
     can_use, used_today, daily_limit = await web_knowledge_cache_service.can_use_web_today(db)
@@ -283,6 +288,14 @@ async def _apply_web_fallback(
 
     web_result = await web_search_service.search(message)
     web_result["daily_usage"] = {"used_today": used_today + (1 if web_result.get("used") else 0), "daily_limit": daily_limit}
+
+    if settings.DEBUG:
+        print(
+            f"[WEB_FALLBACK] búsqueda | enabled={web_result.get('enabled')} "
+            f"used={web_result.get('used')} api_configured={web_search_service.is_enabled()} "
+            f"allowed={web_search_service.is_allowed_query(message)} "
+            f"results={len(web_result.get('results') or [])} reason={web_result.get('reason')}"
+        )
 
     if not web_result.get("used") or not web_result.get("results"):
         bot_result["web_search"] = web_result
@@ -864,7 +877,12 @@ async def send_message(
     )
 
     # Si el flujo necesita datos mínimos, primero pregunta y NO quema tokens de RAG/Gemini innecesariamente.
-    if decision.direct_response and decision.intent not in {"ticket_confirmation"}:
+    # EXCEPCIÓN: si el enrutador clasificó la consulta como ofimática general (Excel, Word,
+    # Outlook, etc. sin señales internas), NO pedimos aplicativo/URL ni cortamos el turno;
+    # dejamos que el flujo continúe hasta FAQ → web-cache → búsqueda web controlada.
+    is_general_tech_route = routing_decision.get("intent_family") in {"general_tech", "general_tech_support"}
+
+    if decision.direct_response and decision.intent not in {"ticket_confirmation"} and not is_general_tech_route:
         db.add(
             Message(
                 conversation_id=conversation.id,
@@ -1225,5 +1243,3 @@ async def end_session(
         await db.commit()
 
     return {"message": "Sesión cerrada", "session_id": session_id}
-
-
