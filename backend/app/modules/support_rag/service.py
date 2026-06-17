@@ -65,14 +65,45 @@ class SupportRAGService:
         return hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()
 
     async def _extract_text(self, doc: Dict) -> str:
-        """Devuelve el texto de un documento (procesa PDF con Document AI)."""
-        from app.services.vertex.document_ai_service import document_ai_service
+        """Devuelve el texto de un documento.
 
+        PDF:
+        1. Intenta extracción local con pypdf para PDF digitales.
+        2. Si no encuentra texto, intenta Document AI para PDF escaneados/imágenes.
+        """
         if doc.get("doc_type") == "pdf" and doc.get("bytes"):
-            text = await document_ai_service.process_pdf(doc["bytes"])
-            if not text:
-                text = doc.get("content", "")
-            return text
+            pdf_bytes = doc["bytes"]
+
+            # 1) PDF digital: extracción local
+            try:
+                import io
+                from pypdf import PdfReader
+
+                reader = PdfReader(io.BytesIO(pdf_bytes))
+                pages = []
+                for idx, page in enumerate(reader.pages, start=1):
+                    text = page.extract_text() or ""
+                    if text.strip():
+                        pages.append(f"[Página {idx}]\n{text.strip()}")
+
+                local_text = "\n\n".join(pages).strip()
+                if local_text:
+                    return local_text
+            except Exception as exc:
+                print(f"⚠️  PDF local extraction error en {doc.get('name')}: {exc}")
+
+            # 2) PDF escaneado / imagen: Document AI
+            try:
+                from app.services.vertex.document_ai_service import document_ai_service
+
+                text = await document_ai_service.process_pdf(pdf_bytes)
+                if text and text.strip():
+                    return text.strip()
+            except Exception as exc:
+                print(f"⚠️  Document AI extraction error en {doc.get('name')}: {exc}")
+
+            return ""
+
         return doc.get("content", "")
 
     def _delete_chunks_for_file(self, collection, file_id: str):

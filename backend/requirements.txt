@@ -30,3 +30,4 @@ gunicorn==22.0.0
 pytest==8.2.0
 pytest-asyncio==0.23.7
 openpyxl==3.1.5
+pypdf==4.3.1

@@ -1,6 +1,6 @@
 # docker-compose.yml == DESARROLLO
 # Para producción: docker-compose -f docker-compose.prod.yml up
-version: "3.9"
+
 
 services:
 
@@ -25,7 +25,7 @@ services:
       - botiq_network
 
   chromadb:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:0.5.0
     container_name: botiq_chromadb
     ports:
       - "8003:8000"   # Expuesto en dev, cerrado en prod
