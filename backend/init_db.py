@@ -16,6 +16,7 @@ from app.models.knowledge_document import KnowledgeDocument  # noqa: F401
 from app.models.network_user import NetworkUser  # noqa: F401
 from app.models.server_log import ServerLog  # noqa: F401
 from app.models.user import User  # noqa: F401
+from app.models.web_knowledge_cache import WebKnowledgeCache  # noqa: F401
 
 
 async def init_db():

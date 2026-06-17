@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.models.application_matrix import ApplicationMatrix
 from app.models.network_user import NetworkUser
 from app.models.user import User
+from app.models.web_knowledge_cache import WebKnowledgeCache
 from app.schemas.application_matrix import (
     ApplicationMatrixCreate,
     ApplicationMatrixResponse,
@@ -18,7 +19,9 @@ from app.schemas.application_matrix import (
 )
 from app.schemas.network_user import NetworkUserCreate, NetworkUserResponse, NetworkUserUpdate
 from app.schemas.user import AdminChangeRole, AdminCreateUser, AdminUpdateUser, UserResponse
+from app.schemas.web_knowledge_cache import WebKnowledgeApproveRequest, WebKnowledgeCacheResponse, WebKnowledgeCacheUpdate, WebKnowledgeRejectRequest
 from app.services.audit_service import audit_service
+from app.services.web_knowledge_cache_service import web_knowledge_cache_service
 
 router = APIRouter()
 
@@ -329,3 +332,97 @@ async def disable_application_matrix_item(
     await db.commit()
     await db.refresh(row)
     return row
+
+# ─────────────────────────────────────────────────────────────
+# Conocimiento web sugerido / pendiente de aprobación
+# ─────────────────────────────────────────────────────────────
+
+@router.get("/web-knowledge-cache", response_model=List[WebKnowledgeCacheResponse])
+async def list_web_knowledge_cache(
+    status: str = Query("pending", pattern="^(pending|approved|rejected)$"),
+    q: str = Query(""),
+    limit: int = Query(100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    return await web_knowledge_cache_service.list_items(db, status=status, q=q, limit=limit)
+
+
+@router.put("/web-knowledge-cache/{item_id}", response_model=WebKnowledgeCacheResponse)
+async def update_web_knowledge_cache_item(
+    item_id: uuid.UUID,
+    data: WebKnowledgeCacheUpdate,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(require_admin),
+):
+    item = (await db.execute(select(WebKnowledgeCache).where(WebKnowledgeCache.id == item_id))).scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Sugerencia web no encontrada")
+
+    payload = data.model_dump(exclude_unset=True)
+    if "question" in payload and payload["question"]:
+        item.question = payload["question"]
+        item.normalized_question = web_knowledge_cache_service.normalize_question(item.question)
+    if "answer" in payload and payload["answer"]:
+        item.answer = payload["answer"]
+    if "category" in payload:
+        item.category = payload["category"]
+    if "tags" in payload:
+        item.tags = payload["tags"]
+
+    await audit_service.log(db, "web_knowledge_updated", current.id, "admin", {"item_id": str(item.id)})
+    await db.commit()
+    await db.refresh(item)
+    return item
+
+
+@router.patch("/web-knowledge-cache/{item_id}/approve", response_model=WebKnowledgeCacheResponse)
+async def approve_web_knowledge_cache_item(
+    item_id: uuid.UUID,
+    data: WebKnowledgeApproveRequest,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(require_admin),
+):
+    item = (await db.execute(select(WebKnowledgeCache).where(WebKnowledgeCache.id == item_id))).scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Sugerencia web no encontrada")
+
+    item = await web_knowledge_cache_service.approve_as_faq(
+        db,
+        item,
+        approved_by=current.id,
+        question=data.question,
+        answer=data.answer,
+        category=data.category,
+        tags=data.tags,
+        create_faq=data.create_faq,
+    )
+
+    await audit_service.log(
+        db,
+        "web_knowledge_approved",
+        current.id,
+        "admin",
+        {"item_id": str(item.id), "faq_id": str(item.faq_id) if item.faq_id else None},
+    )
+    await db.commit()
+    await db.refresh(item)
+    return item
+
+
+@router.patch("/web-knowledge-cache/{item_id}/reject", response_model=WebKnowledgeCacheResponse)
+async def reject_web_knowledge_cache_item(
+    item_id: uuid.UUID,
+    data: WebKnowledgeRejectRequest,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(require_admin),
+):
+    item = (await db.execute(select(WebKnowledgeCache).where(WebKnowledgeCache.id == item_id))).scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Sugerencia web no encontrada")
+
+    item = await web_knowledge_cache_service.reject(db, item, rejected_by=current.id, reason=data.reason)
+    await audit_service.log(db, "web_knowledge_rejected", current.id, "admin", {"item_id": str(item.id), "reason": data.reason})
+    await db.commit()
+    await db.refresh(item)
+    return item

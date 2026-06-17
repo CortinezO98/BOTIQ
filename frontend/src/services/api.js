@@ -106,6 +106,12 @@ export const adminAPI = {
   listNetworkUsers: (q = "") => api.get("/admin/network-users", { params: { q } }),
   createNetworkUser: (data) => api.post("/admin/network-users", data),
   updateNetworkUser: (id, data) => api.put(`/admin/network-users/${id}`, data),
+
+  listWebKnowledge: (status = "pending", q = "", limit = 100) =>
+    api.get("/admin/web-knowledge-cache", { params: { status, q, limit } }),
+  updateWebKnowledge: (id, data) => api.put(`/admin/web-knowledge-cache/${id}`, data),
+  approveWebKnowledge: (id, data = {}) => api.patch(`/admin/web-knowledge-cache/${id}/approve`, data),
+  rejectWebKnowledge: (id, reason = "") => api.patch(`/admin/web-knowledge-cache/${id}/reject`, { reason }),
 };
 
 // --- Utilidades de reportería ---

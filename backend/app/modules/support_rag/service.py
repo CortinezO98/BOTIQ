@@ -31,6 +31,37 @@ Reglas:
 6. Si se debe escalar, explica qué validaciones ya se deberían tener antes de crear ticket.
 """
 
+
+
+TECH_STOPWORDS = {
+    "hola", "estoy", "intentando", "usando", "formula", "fórmula", "problema", "resultado",
+    "columna", "llena", "numeros", "números", "como", "simplemente", "porque", "pasa", "soluciono",
+    "solución", "usuario", "error", "abrir", "puedo", "tengo", "sale", "ayuda", "iq", "botiq"
+}
+
+
+def _query_terms(text: str) -> set[str]:
+    import re
+    terms = set()
+    for t in re.findall(r"[a-zA-ZáéíóúÁÉÍÓÚñÑ0-9_]{3,}", (text or "").lower()):
+        if t not in TECH_STOPWORDS:
+            terms.add(t)
+    return terms
+
+
+def _has_meaningful_overlap(query: str, chunks: List[Dict]) -> bool:
+    """Evita usar RAG cuando Chroma trae documentos internos no relacionados."""
+    terms = _query_terms(query)
+    if not terms:
+        return True
+
+    combined = "\n".join(
+        f"{c.get('source','')} {c.get('content','')[:1200]}" for c in (chunks or [])[:3]
+    ).lower()
+    hits = [t for t in terms if t in combined]
+    return len(hits) >= (2 if len(terms) >= 5 else 1)
+
+
 NO_KNOWLEDGE = (
     "No encontré información suficiente en la base de conocimiento corporativa.\n\n"
     "Antes de escalar, recomiendo:\n"
@@ -370,12 +401,18 @@ class SupportRAGService:
         q = f"{user_message}\nContexto visual: {image_analysis}" if image_analysis else user_message
         chunks = await self.retrieve_context(q)
         avg_conf = sum(c["relevance_score"] for c in chunks) / len(chunks) if chunks else 0.0
+        best_conf = max((c["relevance_score"] for c in chunks), default=0.0)
 
-        if not chunks or avg_conf < settings.RAG_MIN_CONFIDENCE:
+        if (
+            not chunks
+            or best_conf < settings.RAG_MIN_CONFIDENCE
+            or not _has_meaningful_overlap(user_message, chunks)
+        ):
             return {
                 "text": NO_KNOWLEDGE,
                 "sources": [],
                 "avg_confidence": avg_conf,
+                "best_confidence": best_conf,
                 "knowledge_gap": True,
                 "tokens_used": 0,
                 "response_time_ms": 0,
@@ -387,8 +424,21 @@ class SupportRAGService:
             system_instruction=RAG_SYSTEM.format(knowledge_context=context),
             history=history,
             temperature=0.2,
+            max_output_tokens=max(settings.MAX_OUTPUT_TOKENS, 1536),
             model=settings.VERTEX_REASONING_MODEL,
         )
+
+        if not result.get("success", True):
+            return {
+                "text": NO_KNOWLEDGE,
+                "tokens_used": result.get("tokens_used") or 0,
+                "response_time_ms": result.get("response_time_ms") or 0,
+                "sources": list({c["source"] for c in chunks}),
+                "avg_confidence": avg_conf,
+                "best_confidence": best_conf,
+                "knowledge_gap": True,
+                "llm_error": result.get("error") or result.get("finish_reason"),
+            }
 
         return {
             "text": result["text"],
@@ -396,6 +446,7 @@ class SupportRAGService:
             "response_time_ms": result.get("response_time_ms"),
             "sources": list({c["source"] for c in chunks}),
             "avg_confidence": avg_conf,
+            "best_confidence": best_conf,
             "knowledge_gap": False,
         }
 
@@ -405,3 +456,4 @@ class SupportRAGService:
 
 
 support_rag_service = SupportRAGService()
+

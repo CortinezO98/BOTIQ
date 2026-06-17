@@ -38,6 +38,7 @@ from app.services.conversation_flow_service import FlowDecision, conversation_fl
 from app.services.gcs_service import gcs_service
 from app.services.vertex.gemini_vision_service import gemini_vision_service
 from app.services.web_search_service import web_search_service
+from app.services.web_knowledge_cache_service import web_knowledge_cache_service
 
 router = APIRouter()
 
@@ -163,16 +164,19 @@ def _compose_unified_answer(
         response_time_ms += rag_result.get("response_time_ms") or 0
         sources.extend(rag_result.get("sources") or [])
 
-        if not rag_result.get("knowledge_gap"):
+        rag_text = (rag_result.get("text") or "").strip()
+        rag_failed = bool(rag_result.get("knowledge_gap")) or rag_text.lower().startswith("error ia:")
+
+        if not rag_failed:
             if profile == "support_engineer":
                 parts.append(
                     "Según la base de conocimiento corporativa:\n\n"
-                    f"{rag_result.get('text')}"
+                    f"{rag_text}"
                 )
             else:
                 parts.append(
                     "Según la base de conocimiento disponible, te recomiendo:\n\n"
-                    f"{rag_result.get('text')}"
+                    f"{rag_text}"
                 )
         else:
             knowledge_gap = True
@@ -205,51 +209,95 @@ def _compose_unified_answer(
     }
 
 
+async def _apply_approved_web_knowledge(
+    bot_result: Dict,
+    message: str,
+    profile: str,
+    db: AsyncSession,
+) -> Dict:
+    """
+    Antes de consultar internet, revisa si ya existe conocimiento web aprobado.
+    Si existe, responde desde base interna y NO consume Google Custom Search.
+    """
+    if not bot_result.get("knowledge_gap"):
+        return bot_result
+
+    approved = await web_knowledge_cache_service.find_approved(
+        db,
+        message,
+        min_score=settings.WEB_KNOWLEDGE_APPROVED_MIN_SCORE,
+    )
+    if not approved:
+        return bot_result
+
+    prefix = (
+        "Encontré una respuesta aprobada en la base interna de conocimiento sugerido:\n\n"
+        if profile != "support_engineer"
+        else "Encontré conocimiento web previamente aprobado por el administrador:\n\n"
+    )
+
+    bot_result["text"] = prefix + approved["answer"]
+    bot_result["knowledge_gap"] = False
+    bot_result["internal_knowledge_gap"] = False
+    bot_result["web_cache_used"] = True
+    bot_result["web_cache_id"] = approved["id"]
+    bot_result["sources"] = list({*(bot_result.get("sources") or []), "Conocimiento web aprobado"})
+    return bot_result
+
+
 async def _apply_web_fallback(
     bot_result: Dict,
     message: str,
     image_analysis: Optional[str],
     profile: str,
     db: AsyncSession,
+    current_user: User,
 ) -> Dict:
     """
     Consulta internet solo como fallback cuando FAQ/RAG/matriz/estado no dan respuesta suficiente.
-    Mantiene marcada la brecha interna para que el administrador pueda alimentar la KB.
+
+    Si internet ayuda:
+    - responde al usuario,
+    - mantiene trazabilidad de brecha interna,
+    - registra automáticamente una sugerencia en web_knowledge_cache con estado pending.
     """
     if not bot_result.get("knowledge_gap") or not settings.WEB_SEARCH_ENABLED:
         return bot_result
 
+    can_use, used_today, daily_limit = await web_knowledge_cache_service.can_use_web_today(db)
+    if not can_use:
+        bot_result["web_search"] = {
+            "enabled": True,
+            "used": False,
+            "reason": f"Límite diario de búsqueda web alcanzado ({used_today}/{daily_limit}).",
+            "results": [],
+        }
+        bot_result["text"] = (
+            f"{bot_result.get('text') or ''}\n\n"
+            f"Además, el límite diario de búsqueda web está alcanzado ({used_today}/{daily_limit}), "
+            "por lo que continuaré con la información interna disponible. "
+            "Indícame el error exacto, aplicativo/URL, alcance y una captura si la tienes."
+        ).strip()
+        return bot_result
+
     web_result = await web_search_service.search(message)
+    web_result["daily_usage"] = {"used_today": used_today + (1 if web_result.get("used") else 0), "daily_limit": daily_limit}
+
     if not web_result.get("used") or not web_result.get("results"):
         bot_result["web_search"] = web_result
         return bot_result
 
     web_context = web_search_service.format_for_prompt(web_result)
-    prompt = (
-        f"Consulta del usuario: {message}\n\n"
-        "No se encontró una guía interna exacta. A continuación hay resultados públicos de internet "
-        f"para soporte técnico general:\n\n{web_context}\n\n"
-        "Instrucciones de respuesta:\n"
-        "- Responde en español.\n"
-        "- Da pasos seguros y generales de diagnóstico.\n"
-        "- No inventes información interna de IQ.\n"
-        "- No digas que un servidor interno está caído si no hay estado interno.\n"
-        "- Si faltan datos, pide el error exacto, aplicativo/URL, alcance y captura.\n"
-        "- Aclara que la información proviene de referencias públicas cuando aplique."
-    )
-    if image_analysis:
-        prompt += f"\n\nContexto de imagen enviada por el usuario:\n{image_analysis}"
-
-    answer = await employee_bot_service.generate_response(
-        prompt,
+    answer = await web_knowledge_cache_service.build_answer_from_web(
+        question=message,
+        web_context=web_context,
         image_analysis=image_analysis,
-        faq_context=None,
-        db=db,
+        profile=profile,
     )
 
     intro = (
-        "No encontré una guía interna exacta, pero puedo apoyarme en referencias técnicas públicas "
-        "para darte una orientación segura.\n\n"
+        "No encontré una guía interna exacta, pero encontré referencias técnicas públicas que pueden ayudar. "
+        "Usaré esta información como orientación general, no como política interna oficial.\n\n"
     )
     if profile == "support_engineer":
         intro = (
@@ -257,15 +305,35 @@ async def _apply_web_fallback(
             "Como apoyo técnico, consulté referencias públicas generales.\n\n"
         )
 
-    bot_result["text"] = intro + answer.get("text", "")
+    generated_text = answer.get("text", "")
+
+    pending_note = (
+        "\n\n---\n\n"
+        "Registraré esta consulta como conocimiento sugerido pendiente de aprobación. "
+        "Si un administrador la aprueba, BOTIQ la usará como FAQ interna en futuras consultas y no necesitará buscar nuevamente en internet."
+    )
+
+    bot_result["text"] = intro + generated_text + pending_note
     bot_result["tokens_used"] = (bot_result.get("tokens_used") or 0) + (answer.get("tokens_used") or 0)
     bot_result["response_time_ms"] = (bot_result.get("response_time_ms") or 0) + (answer.get("response_time_ms") or 0)
     bot_result["internal_knowledge_gap"] = True
     bot_result["knowledge_gap"] = False
     bot_result["web_used"] = True
     bot_result["web_search"] = web_result
-    return bot_result
 
+    if settings.WEB_KNOWLEDGE_AUTO_REGISTER:
+        item = await web_knowledge_cache_service.register_pending(
+            db,
+            question=message,
+            answer=generated_text,
+            sources=web_result.get("results") or [],
+            created_by=current_user.id,
+            confidence=0.68,
+        )
+        bot_result["web_knowledge_cache_id"] = str(item.id)
+        bot_result["web_knowledge_status"] = item.status
+
+    return bot_result
 
 async def _register_knowledge_gap(
     db: AsyncSession,
@@ -967,12 +1035,20 @@ async def send_message(
             "matrix_used": bool(matrix_result.get("found")),
         }
 
+    bot_result = await _apply_approved_web_knowledge(
+        bot_result=bot_result,
+        message=message,
+        profile=conversation.selected_profile or "employee",
+        db=db,
+    )
+
     bot_result = await _apply_web_fallback(
         bot_result=bot_result,
         message=message,
         image_analysis=image_analysis,
         profile=conversation.selected_profile or "employee",
         db=db,
+        current_user=current_user,
     )
 
     if app_status:
@@ -1031,6 +1107,10 @@ async def send_message(
                 "matrix_used": bot_result.get("matrix_used"),
                 "web_used": bot_result.get("web_used", False),
                 "web_search": bot_result.get("web_search"),
+                "web_cache_used": bot_result.get("web_cache_used", False),
+                "web_cache_id": bot_result.get("web_cache_id"),
+                "web_knowledge_cache_id": bot_result.get("web_knowledge_cache_id"),
+                "web_knowledge_status": bot_result.get("web_knowledge_status"),
                 "internal_knowledge_gap": bot_result.get("internal_knowledge_gap", False),
                 "module": module.value,
                 "application_status": app_status,
