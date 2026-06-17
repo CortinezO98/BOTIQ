@@ -13,19 +13,9 @@ const MODULE_INFO = {
   server_validation: { label: "Servidores", icon: "🖥️", color: "#0284c7" },
 };
 
-const QUICK_EMPLOYEE = [
-  "No puedo entrar a una URL",
-  "No puedo acceder al portal",
-  "Error al abrir Excel",
-  "Quiero crear un ticket en Aranda",
-];
+const QUICK_EMPLOYEE = [];
 
-const QUICK_SUPPORT = [
-  "Consulta en la base de conocimiento sobre VPN",
-  "Dame el estado de los servidores",
-  "Procedimiento para revisar certificados SSL",
-  "Quiero crear un ticket en Aranda",
-];
+const QUICK_SUPPORT = [];
 
 export default function ChatWidget({ position = "bottom-right", primaryColor = C, embedded = false }) {
   const [open, setOpen] = useState(embedded);
@@ -184,7 +174,7 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
 
         {session && messages.map((msg) => <Bubble key={msg.id} msg={msg} primaryColor={primaryColor} />)}
 
-        {session && messages.length <= 1 && !loading && (
+        {session && quickQuestions.length > 0 && messages.length <= 1 && !loading && (
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
             {quickQuestions.map((question) => (
               <button key={question} onClick={() => sendMessage(question)} style={quickBtn(primaryColor)}>
@@ -550,4 +540,3 @@ const closeImageBtn = {
   color: "#fff",
   fontSize: 11,
 };
-

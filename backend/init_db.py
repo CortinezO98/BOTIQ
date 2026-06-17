@@ -2,16 +2,12 @@
 
 En producción la fuente oficial del esquema es Alembic:
     alembic upgrade head
-
-Este script crea todas las tablas con SQLAlchemy metadata.create_all y luego
-marca Alembic en head (alembic stamp head) para que futuras ejecuciones de
-`alembic upgrade head` no intenten re-aplicar migraciones sobre un esquema
-que ya existe.
 """
 import asyncio
 from pathlib import Path
 
 from app.db.session import Base, engine
+from app.models.application_matrix import ApplicationMatrix  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.conversation import Conversation, Message  # noqa: F401
 from app.models.faq import FAQ  # noqa: F401

@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from app.core.config import settings
 from app.db.session import Base
+from app.models.application_matrix import ApplicationMatrix
 from app.models.audit_log import AuditLog
 from app.models.conversation import Conversation, Message
 from app.models.faq import FAQ

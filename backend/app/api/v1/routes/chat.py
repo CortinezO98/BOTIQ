@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Dict, List, Optional
 import base64
 import csv
 import io
@@ -29,12 +29,15 @@ from app.schemas.chat import (
     ConversationItem,
     MessageItem,
 )
+from app.services.application_matrix_service import application_matrix_service
 from app.services.application_status_service import application_status_service
 from app.services.aranda_service import aranda_service
 from app.services.audit_service import audit_service
 from app.services.chat_guard_service import chat_guard_service
+from app.services.conversation_flow_service import FlowDecision, conversation_flow_service
 from app.services.gcs_service import gcs_service
 from app.services.vertex.gemini_vision_service import gemini_vision_service
+from app.services.web_search_service import web_search_service
 
 router = APIRouter()
 
@@ -48,21 +51,18 @@ MODULE_PERM = {
 def _welcome_message(profile: str, support_validated: bool = False) -> str:
     if profile == "support_engineer":
         return (
-            "Perfil configurado como Ingeniero de Soporte."
-            + (" Usuario de red validado." if support_validated else "")
-            + "\n\nPuedes consultarme sobre documentación técnica, procedimientos, base de conocimiento, servidores, URLs, aplicativos e incidentes corporativos."
+            "Hola, soy BOTIQ, tu asistente técnico de soporte."
+            + (" Tu usuario de red fue validado correctamente." if support_validated else "")
+            + "\n\nCuéntame qué necesitas revisar. Puedo apoyarte con procedimientos, preguntas frecuentes, "
+            "base de conocimiento, aplicativos, servidores, URLs, IPs, errores técnicos, imágenes de incidentes "
+            "y contexto para atención de casos."
         )
 
     return (
-        "Perfil configurado como Empleado.\n\n"
-        "Puedo ayudarte con accesos, errores de aplicaciones, correo, VPN, portales, URLs, disponibilidad de servicios y soporte técnico básico."
+        "Hola, soy BOTIQ, tu asistente virtual corporativo.\n\n"
+        "Estoy aquí para ayudarte. Cuéntame qué está pasando con tu equipo, aplicativo, portal, archivo, "
+        "impresora, correo, VPN, URL o servicio corporativo, y validaré la información disponible para orientarte."
     )
-
-
-def _module_from_profile_and_message(conversation: Conversation, current_user: User, message: str) -> ModuleType:
-    if conversation.selected_profile == "employee":
-        return ModuleType.EMPLOYEE
-    return conversation.module or ModuleType.SUPPORT_RAG
 
 
 async def _classify_support_module(message: str) -> ModuleType:
@@ -70,33 +70,266 @@ async def _classify_support_module(message: str) -> ModuleType:
     return intent.module
 
 
-def _compose_app_status_message(status: dict) -> str:
-    if not status:
+def _compose_app_status_message(status: dict, matrix_result: Optional[dict] = None) -> str:
+    if not status and not matrix_result:
         return ""
+
+    matrix_text = ""
+    if matrix_result and matrix_result.get("found"):
+        app = matrix_result.get("application") or {}
+        matrix_text = (
+            "Según la matriz interna de aplicaciones:\n"
+            f"- Aplicativo: {app.get('app_name') or 'N/A'}\n"
+            f"- Portal: {app.get('portal_name') or 'N/A'}\n"
+            f"- Servidor asociado: {app.get('server_name') or 'N/A'}\n"
+            f"- Ambiente: {app.get('environment') or 'N/A'}\n"
+            f"- Criticidad: {app.get('criticality') or 'N/A'}\n"
+        )
+
+    if not status:
+        return matrix_text
 
     state = str(status.get("status") or "unknown").lower()
     service = status.get("service_name") or status.get("name") or "el servicio consultado"
     msg = status.get("message") or ""
 
     if state in {"down", "failed", "error", "critical", "offline"}:
-        return (
-            f"Validé el estado de {service} y en este momento aparece con estado **{state}**. "
-            f"{msg}\n\nRecomendación: espera unos minutos y vuelve a intentar. Si el problema continúa, puedo ayudarte a validar los pasos previos antes de escalar a Aranda."
+        status_text = (
+            f"Validé el estado de {service} y aparece con estado **{state}**. "
+            f"{msg}\n\n"
+            "Este comportamiento puede requerir escalamiento si el error persiste o impacta a varios usuarios."
         )
-
-    if state in {"degraded", "warning", "slow"}:
-        return (
+    elif state in {"degraded", "warning", "slow"}:
+        status_text = (
             f"Validé el estado de {service} y aparece con degradación o advertencia (**{state}**). "
-            f"{msg}\n\nPuede que el acceso esté intermitente. Te recomiendo intentar nuevamente y confirmar si el error persiste."
+            f"{msg}\n\n"
+            "Puede existir intermitencia. Recomiendo validar alcance, hora del evento y evidencia."
         )
-
-    if state in {"up", "ok", "healthy", "online"}:
-        return (
+    elif state in {"up", "ok", "healthy", "online"}:
+        status_text = (
             f"Validé el estado de {service} y aparece operativo (**{state}**). "
-            f"{msg}\n\nSi sigues sin poder ingresar, revisemos credenciales, VPN, caché del navegador, permisos o el mensaje de error exacto."
+            f"{msg}\n\n"
+            "Si el problema continúa, revisemos credenciales, VPN, caché del navegador, permisos o el error exacto."
+        )
+    else:
+        status_text = f"Consulté el estado de {service}, pero la respuesta fue indeterminada: {status}"
+
+    return f"{matrix_text}\n{status_text}".strip()
+
+
+def _compose_unified_answer(
+    profile: str,
+    decision: FlowDecision,
+    faq: Optional[Dict],
+    rag_result: Optional[Dict],
+    status_reply: str,
+    matrix_result: Optional[Dict],
+    image_analysis: Optional[str],
+) -> Dict:
+    """
+    Une FAQ + RAG + estado interno + análisis de imagen.
+    Evita respuestas secas y registra brechas cuando no hay conocimiento.
+    """
+    parts: List[str] = []
+    sources: List[str] = []
+    tokens_used = 0
+    response_time_ms = 0
+    knowledge_gap = False
+
+    if status_reply:
+        parts.append(status_reply)
+
+    if image_analysis:
+        parts.append(
+            "Analicé la captura adjunta y la usaré como evidencia/contexto del caso.\n"
+            f"Resumen visual: {image_analysis[:700]}"
         )
 
-    return f"Consulté el estado de {service}, pero la respuesta fue indeterminada: {status}"
+    if faq:
+        if profile == "support_engineer":
+            parts.append(
+                "Según las preguntas frecuentes disponibles:\n\n"
+                f"**P:** {faq['question']}\n\n"
+                f"**R:** {faq['answer']}"
+            )
+        else:
+            parts.append(
+                "Encontré una respuesta relacionada en nuestras preguntas frecuentes:\n\n"
+                f"{faq['answer']}"
+            )
+
+    if rag_result:
+        tokens_used += rag_result.get("tokens_used") or 0
+        response_time_ms += rag_result.get("response_time_ms") or 0
+        sources.extend(rag_result.get("sources") or [])
+
+        if not rag_result.get("knowledge_gap"):
+            if profile == "support_engineer":
+                parts.append(
+                    "Según la base de conocimiento corporativa:\n\n"
+                    f"{rag_result.get('text')}"
+                )
+            else:
+                parts.append(
+                    "Según la base de conocimiento disponible, te recomiendo:\n\n"
+                    f"{rag_result.get('text')}"
+                )
+        else:
+            knowledge_gap = True
+
+    if not parts:
+        knowledge_gap = True
+        if profile == "support_engineer":
+            parts.append(
+                "No encontré una respuesta exacta en FAQs ni en la base de conocimiento.\n\n"
+                "Registraré esta brecha de conocimiento para revisión del administrador. "
+                "Mientras tanto, valida aplicativo/URL/IP, error exacto, alcance, hora del evento y evidencia antes de escalar."
+            )
+        else:
+            parts.append(
+                "No encontré información suficiente en la base de conocimiento para resolverlo con seguridad.\n\n"
+                "Para ayudarte mejor, indícame: aplicativo o URL, error exacto, si te pasa solo a ti o a varios usuarios, "
+                "y adjunta una captura si la tienes."
+            )
+
+    text = "\n\n---\n\n".join(parts).strip()
+
+    return {
+        "text": text,
+        "tokens_used": tokens_used,
+        "response_time_ms": response_time_ms,
+        "sources": list({s for s in sources if s}),
+        "knowledge_gap": knowledge_gap,
+        "faq_used": faq is not None,
+        "matrix_used": bool(matrix_result and matrix_result.get("found")),
+    }
+
+
+async def _apply_web_fallback(
+    bot_result: Dict,
+    message: str,
+    image_analysis: Optional[str],
+    profile: str,
+    db: AsyncSession,
+) -> Dict:
+    """
+    Consulta internet solo como fallback cuando FAQ/RAG/matriz/estado no dan respuesta suficiente.
+    Mantiene marcada la brecha interna para que el administrador pueda alimentar la KB.
+    """
+    if not bot_result.get("knowledge_gap") or not settings.WEB_SEARCH_ENABLED:
+        return bot_result
+
+    web_result = await web_search_service.search(message)
+    if not web_result.get("used") or not web_result.get("results"):
+        bot_result["web_search"] = web_result
+        return bot_result
+
+    web_context = web_search_service.format_for_prompt(web_result)
+    prompt = (
+        f"Consulta del usuario: {message}\n\n"
+        "No se encontró una guía interna exacta. A continuación hay resultados públicos de internet "
+        f"para soporte técnico general:\n\n{web_context}\n\n"
+        "Instrucciones de respuesta:\n"
+        "- Responde en español.\n"
+        "- Da pasos seguros y generales de diagnóstico.\n"
+        "- No inventes información interna de IQ.\n"
+        "- No digas que un servidor interno está caído si no hay estado interno.\n"
+        "- Si faltan datos, pide el error exacto, aplicativo/URL, alcance y captura.\n"
+        "- Aclara que la información proviene de referencias públicas cuando aplique."
+    )
+    if image_analysis:
+        prompt += f"\n\nContexto de imagen enviada por el usuario:\n{image_analysis}"
+
+    answer = await employee_bot_service.generate_response(
+        prompt,
+        image_analysis=image_analysis,
+        faq_context=None,
+        db=db,
+    )
+
+    intro = (
+        "No encontré una guía interna exacta, pero puedo apoyarme en referencias técnicas públicas "
+        "para darte una orientación segura.\n\n"
+    )
+    if profile == "support_engineer":
+        intro = (
+            "No encontré una coincidencia interna exacta en FAQs/base de conocimiento. "
+            "Como apoyo técnico, consulté referencias públicas generales.\n\n"
+        )
+
+    bot_result["text"] = intro + answer.get("text", "")
+    bot_result["tokens_used"] = (bot_result.get("tokens_used") or 0) + (answer.get("tokens_used") or 0)
+    bot_result["response_time_ms"] = (bot_result.get("response_time_ms") or 0) + (answer.get("response_time_ms") or 0)
+    bot_result["internal_knowledge_gap"] = True
+    bot_result["knowledge_gap"] = False
+    bot_result["web_used"] = True
+    bot_result["web_search"] = web_result
+    return bot_result
+
+
+async def _register_knowledge_gap(
+    db: AsyncSession,
+    message: str,
+    module: ModuleType,
+    current_user: User,
+    avg_confidence: float = 0.0,
+):
+    from app.models.knowledge_gap import KnowledgeGap
+
+    query = message[:255]
+    existing = (
+        await db.execute(select(KnowledgeGap).where(KnowledgeGap.query == query))
+    ).scalar_one_or_none()
+
+    if existing:
+        existing.frequency += 1
+        existing.last_seen = datetime.now(timezone.utc)
+        existing.avg_confidence = avg_confidence
+    else:
+        db.add(
+            KnowledgeGap(
+                query=query,
+                module=module.value,
+                user_role=current_user.role.value,
+                avg_confidence=avg_confidence,
+                last_seen=datetime.now(timezone.utc),
+                suggested_document="Revisar FAQs, base de conocimiento o matriz de aplicaciones.",
+            )
+        )
+
+
+def _build_aranda_subject(conversation: Conversation, decision: FlowDecision) -> str:
+    slots = decision.slots or {}
+    target = (
+        slots.get("app_or_url")
+        or slots.get("url")
+        or slots.get("ip")
+        or conversation.detected_url
+        or conversation.detected_ip
+        or "Caso de soporte"
+    )
+    return f"BOTIQ - {decision.case_type} - {target}"[:180]
+
+
+def _build_direct_response_payload(
+    text: str,
+    conversation: Conversation,
+    module: ModuleType,
+    session_id: str,
+) -> ChatMessageResponse:
+    return ChatMessageResponse(
+        response=text,
+        session_id=session_id,
+        module_used=module,
+        conversation_id=conversation.id,
+        tokens_used=0,
+        session_status=conversation.session_status,
+        ended_reason=conversation.ended_reason,
+        question_count=conversation.question_count or 0,
+        max_questions=settings.MAX_QUESTIONS_PER_SESSION,
+        ticket_eligible=bool(conversation.ticket_eligible),
+        aranda_ticket_id=conversation.aranda_ticket_id,
+    )
 
 
 @router.post("/session/start", response_model=ChatSessionStartResponse)
@@ -136,7 +369,8 @@ async def start_session(
         metadata_={
             "started_by_user_role": current_user.role.value,
             "max_questions": settings.MAX_QUESTIONS_PER_SESSION,
-            "flow": "employee_faq_or_support_rag",
+            "flow": "guided_support_v2",
+            "case": {},
         },
     )
     db.add(conversation)
@@ -211,13 +445,12 @@ async def get_conversation_messages(
 
 
 def _normalize_date_range(date_from: Optional[datetime], date_to: Optional[datetime]):
-    """Normaliza fechas de filtros: asegura tz UTC y hace date_to inclusivo (fin de día)."""
+    """Normaliza fechas de filtros: asegura tz UTC y hace date_to inclusivo."""
     if date_from and date_from.tzinfo is None:
         date_from = date_from.replace(tzinfo=timezone.utc)
     if date_to:
         if date_to.tzinfo is None:
             date_to = date_to.replace(tzinfo=timezone.utc)
-        # Si viene solo la fecha (00:00), incluir todo el día.
         if date_to.hour == 0 and date_to.minute == 0 and date_to.second == 0:
             date_to = date_to + timedelta(days=1)
     return date_from, date_to
@@ -233,7 +466,6 @@ async def _fetch_admin_logs(
     date_to: Optional[datetime],
     limit: int,
 ) -> List[AdminConversationLogItem]:
-    """Lógica compartida entre el listado de logs y la exportación CSV."""
     date_from, date_to = _normalize_date_range(date_from, date_to)
 
     stmt = (
@@ -262,7 +494,10 @@ async def _fetch_admin_logs(
 
     for conv in conversations:
         user_messages = [
-            msg.content for msg in sorted(conv.messages, key=lambda m: m.created_at or datetime.min.replace(tzinfo=timezone.utc))
+            msg.content for msg in sorted(
+                conv.messages,
+                key=lambda m: m.created_at or datetime.min.replace(tzinfo=timezone.utc),
+            )
             if msg.role == MessageRole.USER
         ]
         all_text = " ".join(user_messages).lower()
@@ -343,7 +578,6 @@ async def admin_conversation_logs_export(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Reportería: exporta los logs de conversaciones filtrados como CSV (compatible con Excel)."""
     rows = await _fetch_admin_logs(db, user_id, selected_profile, session_status, q, date_from, date_to, limit)
 
     buffer = io.StringIO()
@@ -410,7 +644,6 @@ async def admin_conversation_logs_export(
     await db.commit()
 
     filename = f"botiq_conversation_logs_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
-    # BOM utf-8-sig para que Excel detecte la codificación correctamente.
     csv_bytes = ("\ufeff" + buffer.getvalue()).encode("utf-8")
 
     return StreamingResponse(
@@ -426,7 +659,6 @@ async def admin_conversation_messages(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Permite al administrador ver la conversación completa de cualquier usuario (auditoría)."""
     result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalar_one_or_none()
     if not conversation:
@@ -483,18 +715,11 @@ async def send_message(
         await audit_service.log(db, "chat_message_blocked", current_user.id, "chat", {"session_id": session_id, "reason": guard.reason})
         await db.commit()
 
-        return ChatMessageResponse(
-            response=guard.final_message or "Consulta no permitida.",
-            session_id=session_id,
-            module_used=conversation.module,
-            conversation_id=conversation.id,
-            tokens_used=0,
-            session_status=conversation.session_status,
-            ended_reason=conversation.ended_reason,
-            question_count=conversation.question_count or 0,
-            max_questions=settings.MAX_QUESTIONS_PER_SESSION,
-            ticket_eligible=bool(conversation.ticket_eligible),
-            aranda_ticket_id=conversation.aranda_ticket_id,
+        return _build_direct_response_payload(
+            guard.final_message or "Consulta no permitida.",
+            conversation,
+            conversation.module,
+            session_id,
         )
 
     image_analysis = None
@@ -512,40 +737,121 @@ async def send_message(
         vision_result = await gemini_vision_service.analyze_error_screenshot(b64, image.content_type)
         image_analysis = vision_result.get("description")
 
-    # Si el usuario pide ticket, primero valida elegibilidad.
-    if chat_guard_service.asks_for_ticket(message):
-        can_ticket, reason = chat_guard_service.can_create_ticket(conversation)
+    if conversation.selected_profile == "support_engineer":
+        if current_user.role not in {UserRole.SUPPORT_ENGINEER, UserRole.ADMIN}:
+            raise HTTPException(status_code=403, detail="No tienes permiso para operar como Ingeniero de Soporte.")
+        module = await _classify_support_module(message)
+    else:
+        # Empleado usa flujo guiado + base de conocimiento + FAQs + estado interno.
+        module = ModuleType.EMPLOYEE
+
+    if not can_access_module(current_user.role, MODULE_PERM.get(module, "employee_chat")):
+        raise HTTPException(status_code=403, detail=f"Sin permiso para módulo: {module.value}")
+
+    conversation.module = module
+    conversation.question_count = (conversation.question_count or 0) + 1
+
+    decision = conversation_flow_service.analyze(conversation, message, image_analysis=image_analysis)
+    conversation.metadata_ = conversation_flow_service.merge_case_metadata(conversation.metadata_, decision)
+
+    detected_url = chat_guard_service.extract_url(message) or decision.slots.get("url")
+    detected_ip = chat_guard_service.extract_ip(message) or decision.slots.get("ip")
+
+    if detected_url:
+        conversation.detected_url = detected_url
+    if detected_ip:
+        conversation.detected_ip = detected_ip
+
+    # Matriz interna: relaciona URL/IP/aplicativo con servidor, ambiente y criticidad.
+    matrix_result = await application_matrix_service.lookup(
+        db,
+        url=detected_url,
+        ip=detected_ip,
+        query=message,
+    )
+
+    if matrix_result.get("found"):
+        app = matrix_result.get("application") or {}
+        if not conversation.detected_url and app.get("url_pattern"):
+            conversation.detected_url = app["url_pattern"]
+        if not conversation.detected_ip and app.get("ip_address"):
+            conversation.detected_ip = app["ip_address"]
+
+        # Completa slots con datos de la matriz.
+        slots = dict(decision.slots or {})
+        slots.setdefault("app_or_url", app.get("app_name") or app.get("portal_name") or app.get("url_pattern"))
+        slots.setdefault("url", app.get("url_pattern"))
+        slots.setdefault("ip", app.get("ip_address"))
+        decision.slots = slots
+        conversation.metadata_ = conversation_flow_service.merge_case_metadata(conversation.metadata_, decision)
+
+    # Si el flujo necesita datos mínimos, primero pregunta y NO quema tokens de RAG/Gemini innecesariamente.
+    if decision.direct_response and decision.intent not in {"ticket_confirmation"}:
+        db.add(
+            Message(
+                conversation_id=conversation.id,
+                role=MessageRole.USER,
+                content=message,
+                has_image=bool(image_analysis),
+                image_gcs_url=image_gcs_url,
+                metadata_={
+                    "selected_profile": conversation.selected_profile,
+                    "question_number": conversation.question_count,
+                    "flow_decision": decision.__dict__,
+                    "matrix_result": matrix_result,
+                },
+            )
+        )
+        db.add(
+            Message(
+                conversation_id=conversation.id,
+                role=MessageRole.ASSISTANT,
+                content=decision.direct_response,
+                metadata_={"guided_question": True, "flow_decision": decision.__dict__},
+            )
+        )
+        await audit_service.log(
+            db,
+            "chat_guided_question",
+            current_user.id,
+            module.value,
+            {"session_id": session_id, "case_type": decision.case_type, "missing_slots": decision.missing_slots},
+        )
+        await db.commit()
+        return _build_direct_response_payload(decision.direct_response, conversation, module, session_id)
+
+    explicit_ticket_request = chat_guard_service.asks_for_ticket(message) or decision.intent == "ticket_confirmation"
+
+    # Creación estricta de ticket Aranda.
+    if explicit_ticket_request:
+        can_ticket, reason = conversation_flow_service.can_escalate_to_aranda(
+            conversation,
+            decision,
+            explicit_request=True,
+        )
         if not can_ticket:
-            db.add(Message(conversation_id=conversation.id, role=MessageRole.USER, content=message, metadata_={"ticket_requested": True}))
+            db.add(Message(conversation_id=conversation.id, role=MessageRole.USER, content=message, metadata_={"ticket_requested": True, "flow_decision": decision.__dict__}))
             db.add(Message(conversation_id=conversation.id, role=MessageRole.ASSISTANT, content=reason, metadata_={"ticket_denied": True}))
             await audit_service.log(db, "aranda_ticket_denied", current_user.id, "chat", {"session_id": session_id, "reason": reason})
             await db.commit()
-
-            return ChatMessageResponse(
-                response=reason,
-                session_id=session_id,
-                module_used=conversation.module,
-                conversation_id=conversation.id,
-                tokens_used=0,
-                session_status=conversation.session_status,
-                ended_reason=conversation.ended_reason,
-                question_count=conversation.question_count or 0,
-                max_questions=settings.MAX_QUESTIONS_PER_SESSION,
-                ticket_eligible=bool(conversation.ticket_eligible),
-                aranda_ticket_id=conversation.aranda_ticket_id,
-            )
+            return _build_direct_response_payload(reason, conversation, module, session_id)
 
         description = aranda_service.build_ticket_description(conversation, message)
         ticket_result = await aranda_service.create_ticket(
             conversation=conversation,
             current_user=current_user,
-            subject=f"BOTIQ - Caso de soporte {conversation.detected_url or conversation.detected_ip or ''}".strip(),
+            subject=_build_aranda_subject(conversation, decision),
             description=description,
             application_status=conversation.application_status_snapshot,
         )
         aranda_service.mark_ticket_result(conversation, ticket_result)
+        conversation.metadata_ = conversation_flow_service.merge_case_metadata(
+            conversation.metadata_,
+            decision,
+            pending_ticket_confirmation=False,
+        )
 
-        db.add(Message(conversation_id=conversation.id, role=MessageRole.USER, content=message, metadata_={"ticket_requested": True}))
+        db.add(Message(conversation_id=conversation.id, role=MessageRole.USER, content=message, metadata_={"ticket_requested": True, "flow_decision": decision.__dict__}))
         db.add(Message(conversation_id=conversation.id, role=MessageRole.ASSISTANT, content=ticket_result["message"], metadata_={"ticket_result": ticket_result}))
         await audit_service.log(db, "aranda_ticket_requested", current_user.id, "chat", {"session_id": session_id, "result": ticket_result})
         await db.commit()
@@ -553,7 +859,7 @@ async def send_message(
         return ChatMessageResponse(
             response=ticket_result["message"],
             session_id=session_id,
-            module_used=conversation.module,
+            module_used=module,
             conversation_id=conversation.id,
             tokens_used=0,
             escalated_to_aranda=bool(ticket_result.get("created")),
@@ -565,34 +871,27 @@ async def send_message(
             max_questions=settings.MAX_QUESTIONS_PER_SESSION,
         )
 
-    if conversation.selected_profile == "support_engineer":
-        if current_user.role not in {UserRole.SUPPORT_ENGINEER, UserRole.ADMIN}:
-            raise HTTPException(status_code=403, detail="No tienes permiso para operar como Ingeniero de Soporte.")
-        module = await _classify_support_module(message)
-    else:
-        module = ModuleType.EMPLOYEE
-
-    if not can_access_module(current_user.role, MODULE_PERM.get(module, "employee_chat")):
-        raise HTTPException(status_code=403, detail=f"Sin permiso para módulo: {module.value}")
-
-    conversation.module = module
-    conversation.question_count = (conversation.question_count or 0) + 1
-
-    detected_url = chat_guard_service.extract_url(message)
-    detected_ip = chat_guard_service.extract_ip(message)
-
-    if detected_url:
-        conversation.detected_url = detected_url
-    if detected_ip:
-        conversation.detected_ip = detected_ip
-
     app_status = None
     app_status_text = ""
 
-    if detected_url or detected_ip or chat_guard_service.asks_about_url_or_service(message):
-        app_status = await application_status_service.lookup(url=detected_url, ip=detected_ip, query=message)
+    should_check_status = (
+        decision.should_check_status
+        or bool(detected_url or detected_ip)
+        or chat_guard_service.asks_about_url_or_service(message)
+        or bool(matrix_result.get("found"))
+    )
+
+    if should_check_status:
+        app_status = await application_status_service.lookup(
+            url=conversation.detected_url or detected_url,
+            ip=conversation.detected_ip or detected_ip,
+            query=message,
+        )
         conversation.application_status_snapshot = app_status
         app_status_text = application_status_service.format_for_prompt(app_status)
+
+    matrix_text = application_matrix_service.format_for_prompt(matrix_result)
+    status_reply = _compose_app_status_message(app_status, matrix_result)
 
     db.add(
         Message(
@@ -607,44 +906,108 @@ async def send_message(
                 "detected_url": detected_url,
                 "detected_ip": detected_ip,
                 "application_status": app_status,
+                "matrix_result": matrix_result,
+                "flow_decision": decision.__dict__,
             },
         )
     )
 
+    faq = None
+    rag_result = None
     bot_result = None
 
+    enriched_message = message
+    internal_context_parts = []
+
+    if matrix_text:
+        internal_context_parts.append(matrix_text)
+    if app_status_text:
+        internal_context_parts.append(app_status_text)
+    if decision.slots:
+        internal_context_parts.append(f"Datos recolectados del caso: {decision.slots}")
+
+    if internal_context_parts:
+        enriched_message = f"{message}\n\nInformación interna consultada por BOTIQ:\n" + "\n\n".join(internal_context_parts)
+
+    # Empleado: base de conocimiento + FAQs + estado interno.
+    # Ingeniero: FAQs + base de conocimiento técnica + estado/matriz.
     if module == ModuleType.EMPLOYEE:
         faq = await employee_bot_service.get_faq_answer(message, db)
-        enriched_message = message
-        if app_status_text:
-            enriched_message = f"{message}\n\nInformación interna consultada por BOTIQ:\n{app_status_text}"
-        bot_result = await employee_bot_service.generate_response(
-            enriched_message,
+        rag_result = await support_rag_service.generate_response(enriched_message, image_analysis=image_analysis)
+        bot_result = _compose_unified_answer(
+            profile="employee",
+            decision=decision,
+            faq=faq,
+            rag_result=rag_result,
+            status_reply=status_reply,
+            matrix_result=matrix_result,
             image_analysis=image_analysis,
-            faq_context=faq,
-            db=db,
         )
     elif module == ModuleType.SUPPORT_RAG:
-        enriched_message = message
-        if app_status_text:
-            enriched_message = f"{message}\n\nInformación operativa interna:\n{app_status_text}"
-        bot_result = await support_rag_service.generate_response(enriched_message, image_analysis=image_analysis)
+        faq = await employee_bot_service.get_faq_answer(message, db)
+        rag_result = await support_rag_service.generate_response(enriched_message, image_analysis=image_analysis)
+        bot_result = _compose_unified_answer(
+            profile="support_engineer",
+            decision=decision,
+            faq=faq,
+            rag_result=rag_result,
+            status_reply=status_reply,
+            matrix_result=matrix_result,
+            image_analysis=image_analysis,
+        )
     else:
-        bot_result = await server_monitor_service.analyze_and_respond(message, image_analysis=image_analysis)
+        server_result = await server_monitor_service.analyze_and_respond(enriched_message, image_analysis=image_analysis)
+        bot_result = {
+            "text": f"{status_reply}\n\n{server_result.get('text', '')}".strip(),
+            "tokens_used": server_result.get("tokens_used"),
+            "response_time_ms": server_result.get("response_time_ms"),
+            "sources": [],
+            "knowledge_gap": False,
+            "faq_used": False,
+            "matrix_used": bool(matrix_result.get("found")),
+        }
+
+    bot_result = await _apply_web_fallback(
+        bot_result=bot_result,
+        message=message,
+        image_analysis=image_analysis,
+        profile=conversation.selected_profile or "employee",
+        db=db,
+    )
 
     if app_status:
         bot_result["application_status"] = app_status
-        if app_status.get("found"):
-            status_reply = _compose_app_status_message(app_status)
-            if status_reply and module == ModuleType.EMPLOYEE:
-                bot_result["text"] = f"{status_reply}\n\n{bot_result['text']}"
 
-    # Cuenta como intento de solución si se usó FAQ, RAG, estado aplicativo o se detectó brecha.
-    if app_status or bot_result.get("faq_used") or bot_result.get("sources") or bot_result.get("knowledge_gap"):
+    # Cuenta intentos de solución cuando BOTIQ usó una fuente real.
+    used_resolution_source = bool(
+        app_status
+        or faq
+        or (rag_result and not rag_result.get("knowledge_gap"))
+        or matrix_result.get("found")
+        or image_analysis
+    )
+    if used_resolution_source:
         chat_guard_service.mark_resolution_attempt(conversation)
 
-    if bot_result.get("knowledge_gap"):
-        conversation.ticket_eligible = conversation.ticket_eligible or conversation.resolution_attempts >= settings.MIN_RESOLUTION_ATTEMPTS_BEFORE_TICKET
+    if bot_result.get("knowledge_gap") or bot_result.get("internal_knowledge_gap"):
+        await _register_knowledge_gap(
+            db,
+            message,
+            module,
+            current_user,
+            avg_confidence=(rag_result or {}).get("avg_confidence", 0),
+        )
+
+    # Ofrece ticket solo si ya hay señales fuertes y datos mínimos. No crea ticket automático.
+    if conversation_flow_service.should_offer_ticket(conversation, decision, app_status):
+        conversation.ticket_eligible = True
+        offer = conversation_flow_service.build_ticket_offer_message(decision)
+        bot_result["text"] = f"{bot_result['text']}\n\n---\n\n{offer}"
+        conversation.metadata_ = conversation_flow_service.merge_case_metadata(
+            conversation.metadata_,
+            decision,
+            pending_ticket_confirmation=True,
+        )
 
     if conversation.question_count >= settings.MAX_QUESTIONS_PER_SESSION:
         bot_result["text"] = (
@@ -664,37 +1027,20 @@ async def send_message(
             metadata_={
                 "sources": bot_result.get("sources"),
                 "knowledge_gap": bot_result.get("knowledge_gap"),
+                "faq_used": bot_result.get("faq_used"),
+                "matrix_used": bot_result.get("matrix_used"),
+                "web_used": bot_result.get("web_used", False),
+                "web_search": bot_result.get("web_search"),
+                "internal_knowledge_gap": bot_result.get("internal_knowledge_gap", False),
                 "module": module.value,
                 "application_status": app_status,
+                "matrix_result": matrix_result,
                 "resolution_attempts": conversation.resolution_attempts,
                 "ticket_eligible": conversation.ticket_eligible,
+                "flow_decision": decision.__dict__,
             },
         )
     )
-
-    if bot_result.get("escalated_to_aranda"):
-        conversation.ticket_eligible = True
-
-    if bot_result.get("knowledge_gap"):
-        from app.models.knowledge_gap import KnowledgeGap
-
-        existing = (
-            await db.execute(select(KnowledgeGap).where(KnowledgeGap.query == message[:255]))
-        ).scalar_one_or_none()
-
-        if existing:
-            existing.frequency += 1
-            existing.last_seen = datetime.now(timezone.utc)
-        else:
-            db.add(
-                KnowledgeGap(
-                    query=message[:255],
-                    module=module.value,
-                    user_role=current_user.role.value,
-                    avg_confidence=bot_result.get("avg_confidence", 0),
-                    last_seen=datetime.now(timezone.utc),
-                )
-            )
 
     await audit_service.log(
         db,
@@ -709,6 +1055,8 @@ async def send_message(
             "detected_url": detected_url,
             "detected_ip": detected_ip,
             "ticket_eligible": conversation.ticket_eligible,
+            "case_type": decision.case_type,
+            "matrix_found": matrix_result.get("found"),
         },
     )
     await db.commit()

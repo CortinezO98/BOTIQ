@@ -38,6 +38,15 @@ class Settings(BaseSettings):
     MAX_OUTPUT_TOKENS: int = 1024
     VERTEX_TIMEOUT_SECONDS: int = 30
 
+    # Búsqueda web controlada: solo fallback para soporte técnico general, nunca para datos internos.
+    WEB_SEARCH_ENABLED: bool = False
+    WEB_SEARCH_PROVIDER: str = "google_custom_search"
+    WEB_SEARCH_API_URL: str = ""
+    WEB_SEARCH_API_KEY: str = ""
+    WEB_SEARCH_CX: str = ""
+    WEB_SEARCH_TIMEOUT_SECONDS: int = 8
+    WEB_SEARCH_MAX_RESULTS: int = 5
+
     DOCUMENT_AI_PROCESSOR_ID: str = ""
     DOCUMENT_AI_LOCATION: str = "us"
 
