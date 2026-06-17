@@ -5,6 +5,13 @@ import httpx
 
 from app.core.config import settings
 
+# Si llega un `query` más largo que esto y no hay url/ip, lo tratamos como
+# texto libre (pregunta del usuario) y NO como un identificador de servicio.
+# Antes, `target = url or ip or query` usaba el mensaje completo del usuario
+# como "nombre de servicio" en la respuesta (p. ej. "Validé el estado de
+# <pregunta completa de 60 palabras> y aparece operativo").
+_MAX_QUERY_AS_SERVICE_NAME_LENGTH = 40
+
 
 class ApplicationStatusService:
     """
@@ -59,7 +66,26 @@ class ApplicationStatusService:
         return bool(settings.APPLICATION_STATUS_API_URL)
 
     def _demo_lookup(self, url: Optional[str], ip: Optional[str], query: Optional[str]) -> Dict[str, Any]:
-        target = url or ip or query or "servicio"
+        # Solo url/ip son identificadores confiables de un servicio real.
+        # `query` puede ser cualquier mensaje libre del usuario (incluida una
+        # pregunta larga sin relación con un aplicativo), así que únicamente
+        # lo usamos como nombre de servicio si es corto -- es decir, si en
+        # realidad parece un nombre de aplicativo y no una oración completa.
+        target = url or ip
+        if not target and query:
+            stripped = query.strip()
+            if stripped and len(stripped) <= _MAX_QUERY_AS_SERVICE_NAME_LENGTH:
+                target = stripped
+
+        if not target:
+            return {
+                "configured": False,
+                "found": False,
+                "status": "unknown",
+                "message": "No se identificó una URL, IP o nombre de aplicativo válido para validar su estado.",
+                "_source": "demo",
+            }
+
         lowered = target.lower()
 
         if any(k in lowered for k in ["down", "caido", "caído", "error500", "500"]):
@@ -99,5 +125,3 @@ class ApplicationStatusService:
 
 
 application_status_service = ApplicationStatusService()
-
-

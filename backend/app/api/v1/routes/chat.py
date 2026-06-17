@@ -40,6 +40,7 @@ from app.services.vertex.gemini_vision_service import gemini_vision_service
 from app.services.web_search_service import web_search_service
 from app.services.web_knowledge_cache_service import web_knowledge_cache_service
 from app.services.routing_policy_service import routing_policy_service
+from app.services.general_assistant_service import general_assistant_service
 
 router = APIRouter()
 
@@ -70,6 +71,49 @@ def _welcome_message(profile: str, support_validated: bool = False) -> str:
 async def _classify_support_module(message: str) -> ModuleType:
     intent = await intent_classifier_service.classify(message)
     return intent.module
+
+
+# Cuántos mensajes previos (usuario + asistente) se reenvían como historial a
+# Gemini en las respuestas de RAG. Más alto = mejor continuidad conversacional
+# pero más tokens consumidos en cada turno. 6 mensajes ≈ 3 intercambios.
+RAG_HISTORY_MAX_MESSAGES = 6
+# Tope de caracteres por mensaje de historial, para que una respuesta larga
+# anterior no infle el prompt de todos los turnos siguientes.
+RAG_HISTORY_MAX_CHARS_PER_MESSAGE = 600
+
+
+async def _load_rag_history(db: AsyncSession, conversation_id: uuid.UUID) -> List[Dict]:
+    """
+    Carga los últimos turnos YA PERSISTIDOS de la conversación, para dar
+    continuidad a Gemini en las respuestas de RAG (p. ej. "dame el paso a
+    paso" referido a la respuesta anterior).
+
+    Antes, support_rag_service.generate_response() se llamaba sin `history`,
+    así que cada mensaje se procesaba de forma aislada y el modelo no tenía
+    forma de saber a qué se refería un mensaje corto de seguimiento.
+
+    Se llama ANTES de agregar el mensaje actual a la sesión de BD, para no
+    duplicarlo (el mensaje actual ya se envía aparte como prompt).
+    """
+    rows = (
+        await db.execute(
+            select(Message)
+            .where(
+                Message.conversation_id == conversation_id,
+                Message.role.in_([MessageRole.USER, MessageRole.ASSISTANT]),
+            )
+            .order_by(desc(Message.created_at))
+            .limit(RAG_HISTORY_MAX_MESSAGES)
+        )
+    ).scalars().all()
+
+    history: List[Dict] = []
+    for row in reversed(rows):  # orden cronológico ascendente
+        role = "model" if row.role == MessageRole.ASSISTANT else "user"
+        content = (row.content or "")[:RAG_HISTORY_MAX_CHARS_PER_MESSAGE]
+        if content:
+            history.append({"role": role, "content": content})
+    return history
 
 
 def _compose_app_status_message(status: dict, matrix_result: Optional[dict] = None) -> str:
@@ -348,6 +392,66 @@ async def _apply_web_fallback(
         bot_result["web_knowledge_status"] = item.status
 
     return bot_result
+
+
+async def _apply_general_ai_fallback(
+    bot_result: Dict,
+    message: str,
+    image_analysis: Optional[str],
+    profile: str,
+    is_general_tech_route: bool,
+    history: Optional[List[Dict]],
+) -> Dict:
+    """
+    Último eslabón de la cadena: si NADA más respondió (ni FAQ, ni RAG interno,
+    ni conocimiento web aprobado, ni búsqueda web — porque está deshabilitada,
+    sin resultados, cupo agotado o la consulta no calificó para salir a
+    internet), y la pregunta es de ofimática/tecnología GENERAL (no interna),
+    Gemini responde con su propio conocimiento, dejando explícito que es
+    orientación general y no un procedimiento validado por IQ.
+
+    Restricción deliberada: NUNCA se activa para preguntas internas/mixtas
+    (is_general_tech_route=False). Para esas, inventar una respuesta sin
+    ninguna fuente real sería más riesgoso que admitir que no se encontró
+    información, porque Gemini no tiene cómo conocer aplicativos, portales
+    o políticas internas de IQ.
+    """
+    if not bot_result.get("knowledge_gap"):
+        return bot_result
+    if not is_general_tech_route:
+        return bot_result
+    if not settings.GENERAL_AI_FALLBACK_ENABLED:
+        return bot_result
+
+    answer = await general_assistant_service.build_general_answer(
+        question=message,
+        image_analysis=image_analysis,
+        history=history,
+    )
+
+    if not answer.get("success", True):
+        return bot_result
+
+    generated_text = (answer.get("text") or "").strip()
+    if not generated_text:
+        return bot_result
+
+    intro = (
+        "No encontré una guía interna ni referencias web para esto, pero puedo orientarte con "
+        "conocimiento general de la herramienta (no es un procedimiento validado por IQ):\n\n"
+        if profile != "support_engineer"
+        else "Sin coincidencia interna ni resultado de búsqueda web. Como apoyo, esto es "
+        "conocimiento general de la herramienta, no política interna de IQ:\n\n"
+    )
+
+    bot_result["text"] = intro + generated_text
+    bot_result["tokens_used"] = (bot_result.get("tokens_used") or 0) + (answer.get("tokens_used") or 0)
+    bot_result["response_time_ms"] = (bot_result.get("response_time_ms") or 0) + (answer.get("response_time_ms") or 0)
+    bot_result["internal_knowledge_gap"] = True
+    bot_result["knowledge_gap"] = False
+    bot_result["general_ai_used"] = True
+    return bot_result
+
 
 async def _register_knowledge_gap(
     db: AsyncSession,
@@ -836,6 +940,10 @@ async def send_message(
     decision = conversation_flow_service.analyze(conversation, message, image_analysis=image_analysis)
     conversation.metadata_ = conversation_flow_service.merge_case_metadata(conversation.metadata_, decision)
 
+    # Se carga ANTES de agregar el mensaje actual a la sesión, para que el
+    # historial no incluya (duplicado) el propio mensaje que se está procesando.
+    rag_history = await _load_rag_history(db, conversation.id)
+
     detected_url = chat_guard_service.extract_url(message) or decision.slots.get("url")
     detected_ip = chat_guard_service.extract_ip(message) or decision.slots.get("ip")
 
@@ -1036,7 +1144,9 @@ async def send_message(
         faq = await employee_bot_service.get_faq_answer(message, db)
 
         if routing_decision.get("use_rag", True):
-            rag_result = await support_rag_service.generate_response(enriched_message, image_analysis=image_analysis)
+            rag_result = await support_rag_service.generate_response(
+                enriched_message, image_analysis=image_analysis, history=rag_history
+            )
         else:
             rag_result = {
                 "text": "RAG omitido por política de enrutamiento para ahorrar tokens y evitar fuentes internas irrelevantes.",
@@ -1062,7 +1172,9 @@ async def send_message(
         faq = await employee_bot_service.get_faq_answer(message, db)
 
         if routing_decision.get("use_rag", True):
-            rag_result = await support_rag_service.generate_response(enriched_message, image_analysis=image_analysis)
+            rag_result = await support_rag_service.generate_response(
+                enriched_message, image_analysis=image_analysis, history=rag_history
+            )
         else:
             rag_result = {
                 "text": "RAG omitido por política de enrutamiento para ahorrar tokens y evitar fuentes internas irrelevantes.",
@@ -1110,6 +1222,15 @@ async def send_message(
         profile=conversation.selected_profile or "employee",
         db=db,
         current_user=current_user,
+    )
+
+    bot_result = await _apply_general_ai_fallback(
+        bot_result=bot_result,
+        message=message,
+        image_analysis=image_analysis,
+        profile=conversation.selected_profile or "employee",
+        is_general_tech_route=is_general_tech_route,
+        history=rag_history,
     )
 
     if app_status:

@@ -72,7 +72,7 @@ class GeminiTextService:
             }
 
         try:
-            from vertexai.generative_models import GenerativeModel, GenerationConfig
+            from vertexai.generative_models import GenerativeModel, GenerationConfig, Content, Part
 
             selected_model = model or settings.VERTEX_GEMINI_MODEL
             gm = GenerativeModel(selected_model, system_instruction=system_instruction)
@@ -85,9 +85,18 @@ class GeminiTextService:
             if history:
                 for h in history:
                     role = h.get("role") or "user"
+                    # Vertex solo acepta "user"/"model"; se normaliza por si algún
+                    # llamador todavía manda "assistant" u otro valor.
+                    if role not in ("user", "model"):
+                        role = "model" if role == "assistant" else "user"
                     content = h.get("content") or ""
                     if content:
-                        history_fmt.append({"role": role, "parts": [{"text": content}]})
+                        try:
+                            history_fmt.append(Content(role=role, parts=[Part.from_text(content)]))
+                        except Exception as exc:  # noqa: BLE001
+                            # Un turno de historial mal formado no debe tumbar
+                            # toda la conversación; se descarta solo ese turno.
+                            print(f"Gemini history skip: {exc}")
 
             chat = gm.start_chat(history=history_fmt, response_validation=False)
             resp = await chat.send_message_async(prompt, generation_config=cfg)
@@ -125,5 +134,3 @@ class GeminiTextService:
 
 
 gemini_text_service = GeminiTextService()
-
-

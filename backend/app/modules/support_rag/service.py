@@ -24,11 +24,15 @@ Alcance:
 
 Reglas:
 1. Responde SOLO con base en el contexto y la información operativa interna recibida.
-2. Cita fuentes cuando uses documentos.
+2. Si citas una fuente, menciona solo el nombre del documento en una línea al final
+   (ej. "Fuente: Anexo 19"), en texto plano, SIN corchetes ni el marcador "### Documento:".
+   Nunca copies literalmente los encabezados que ves en "Base de conocimiento disponible".
 3. Si el contexto no es suficiente, dilo claramente.
 4. Da pasos numerados y accionables.
 5. No respondas temas ajenos al negocio ni información no relacionada con IQ.
 6. Si se debe escalar, explica qué validaciones ya se deberían tener antes de crear ticket.
+7. Sé breve: máximo 2-3 párrafos cortos o una lista de pasos. No repitas la pregunta
+   del usuario ni reproduzcas el contexto recibido.
 """
 
 
@@ -62,6 +66,29 @@ def _has_meaningful_overlap(query: str, chunks: List[Dict]) -> bool:
     return len(hits) >= (2 if len(terms) >= 5 else 1)
 
 
+# Mensajes de seguimiento cortos ("dame el paso a paso", "no funcionó", "sigue
+# igual") casi siempre tienen pocos caracteres, aunque puedan tener varias
+# palabras (artículos, verbos genéricos). Contar términos "de contenido" no
+# es confiable aquí porque palabras como "paso", "hacer" o "proceso" no están
+# en TECH_STOPWORDS y cuentan como si fueran términos técnicos. Se usa la
+# longitud del mensaje como señal: por debajo de este umbral, se enriquece
+# la consulta con el último mensaje del usuario para no perder el tema.
+_FOLLOWUP_MAX_CHARS = 60
+
+
+def _build_retrieval_query(user_message: str, history: Optional[List[Dict]]) -> str:
+    stripped = (user_message or "").strip()
+    if len(stripped) > _FOLLOWUP_MAX_CHARS or not history:
+        return user_message
+    for turn in reversed(history):
+        if turn.get("role") == "user":
+            prev = (turn.get("content") or "").strip()[:300]
+            if prev and prev != user_message:
+                return f"{prev}\n{user_message}"
+            break
+    return user_message
+
+
 NO_KNOWLEDGE = (
     "No encontré información suficiente en la base de conocimiento corporativa.\n\n"
     "Antes de escalar, recomiendo:\n"
@@ -70,6 +97,24 @@ NO_KNOWLEDGE = (
     "3. Revisar error exacto, fecha/hora, usuario afectado y evidencia.\n"
     "4. Agregar documentación sobre este tema a Google Drive si es recurrente."
 )
+
+
+def _strip_leaked_context_markers(text: str) -> str:
+    """
+    Red de seguridad ante fugas del prompt.
+
+    Aunque el system prompt ya pide no copiar los encabezados del contexto
+    interno, los modelos a veces los reproducen igual (p. ej.
+    "[Fuente: archivo.xlsx]" o "### Documento: archivo.xlsx"). Esto limpia
+    esos restos antes de mostrarle la respuesta al usuario.
+    """
+    import re
+
+    if not text:
+        return text
+    cleaned = re.sub(r"\[Fuente:[^\]]*\]\s*", "", text)
+    cleaned = re.sub(r"#{1,3}\s*Documento:.*", "", cleaned)
+    return cleaned.strip()
 
 
 class SupportRAGService:
@@ -398,7 +443,8 @@ class SupportRAGService:
         image_analysis: Optional[str] = None,
         history: Optional[List[Dict]] = None,
     ) -> Dict:
-        q = f"{user_message}\nContexto visual: {image_analysis}" if image_analysis else user_message
+        retrieval_base = _build_retrieval_query(user_message, history)
+        q = f"{retrieval_base}\nContexto visual: {image_analysis}" if image_analysis else retrieval_base
         chunks = await self.retrieve_context(q)
         avg_conf = sum(c["relevance_score"] for c in chunks) / len(chunks) if chunks else 0.0
         best_conf = max((c["relevance_score"] for c in chunks), default=0.0)
@@ -406,7 +452,7 @@ class SupportRAGService:
         if (
             not chunks
             or best_conf < settings.RAG_MIN_CONFIDENCE
-            or not _has_meaningful_overlap(user_message, chunks)
+            or not _has_meaningful_overlap(retrieval_base, chunks)
         ):
             return {
                 "text": NO_KNOWLEDGE,
@@ -422,7 +468,7 @@ class SupportRAGService:
         context_parts = []
         remaining = max(1000, settings.RAG_MAX_CONTEXT_CHARS)
         for c in selected_chunks:
-            block = f"[Fuente: {c['source']}]\n{c['content']}"
+            block = f"### Documento: {c['source']}\n{c['content']}"
             if len(block) > remaining:
                 block = block[:remaining]
             context_parts.append(block)
@@ -453,7 +499,7 @@ class SupportRAGService:
             }
 
         return {
-            "text": result["text"],
+            "text": _strip_leaked_context_markers(result["text"]),
             "tokens_used": result.get("tokens_used"),
             "response_time_ms": result.get("response_time_ms"),
             "sources": list({c["source"] for c in chunks}),
@@ -469,6 +515,3 @@ class SupportRAGService:
 
 
 support_rag_service = SupportRAGService()
-
-
-

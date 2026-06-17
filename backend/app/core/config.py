@@ -66,6 +66,15 @@ class Settings(BaseSettings):
     WEB_KNOWLEDGE_APPROVAL_REQUIRED: bool = True
     WEB_KNOWLEDGE_APPROVED_MIN_SCORE: int = 72
 
+    # Último recurso para preguntas de ofimática general (Excel/Word/Windows/
+    # navegador) cuando FAQ, RAG y búsqueda web no resolvieron nada. Gemini
+    # responde con su propio conocimiento, dejando claro que NO es política
+    # interna de IQ. Nunca se usa para preguntas internas/mixtas (eso
+    # seguiría yendo a "no encontré información" para no inventar sobre
+    # aplicativos/portales internos que el modelo no conoce).
+    GENERAL_AI_FALLBACK_ENABLED: bool = True
+    GENERAL_AI_ANSWER_MAX_OUTPUT_TOKENS: int = 500
+
     DOCUMENT_AI_PROCESSOR_ID: str = ""
     DOCUMENT_AI_LOCATION: str = "us"
 
@@ -161,5 +170,3 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-
-

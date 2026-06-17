@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
@@ -7,6 +8,16 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.application_matrix import ApplicationMatrix
+
+# Palabras demasiado cortas no sirven como evidencia de que el usuario está
+# hablando de un aplicativo/portal/servidor específico (p. ej. "SO", "IT").
+_MIN_CANDIDATE_LENGTH = 4
+
+# Umbral mínimo para aceptar un match por texto libre como confiable.
+# Antes era 50: UNA sola coincidencia débil (score 55, ver _term_matches)
+# bastaba para disparar falsos positivos sobre mensajes largos sin relación
+# real con ningún aplicativo (p. ej. preguntas de procedimiento genérico).
+_MIN_MATCH_SCORE = 80
 
 
 class ApplicationMatrixService:
@@ -29,6 +40,19 @@ class ApplicationMatrixService:
         host = (parsed.netloc or parsed.path).lower().replace("www.", "")
         path = parsed.path.rstrip("/")
         return f"{host}{path}".strip("/")
+
+    def _term_matches(self, candidate: str, text: str) -> bool:
+        """
+        Coincidencia por palabra completa (no substring) y con longitud mínima.
+
+        Antes se usaba `candidate in text`, lo que permitía que cualquier
+        app_name/portal_name/server_name corto apareciera "por accidente"
+        dentro de un mensaje largo y no relacionado, generando falsos
+        positivos de "aplicativo encontrado".
+        """
+        if not candidate or len(candidate) < _MIN_CANDIDATE_LENGTH:
+            return False
+        return re.search(r"\b" + re.escape(candidate) + r"\b", text) is not None
 
     async def lookup(
         self,
@@ -75,15 +99,19 @@ class ApplicationMatrixService:
                 score += 100
 
             if q_norm:
-                for candidate in [app_name, portal_name, server_name, row_url, row_ip]:
-                    if candidate and candidate in q_norm:
+                # Solo comparamos contra nombres "humanos" (app/portal/servidor).
+                # row_url y row_ip ya se evalúan arriba con comparación exacta/
+                # normalizada; incluirlos aquí como substring del mensaje libre
+                # era una fuente extra de falsos positivos.
+                for candidate in [app_name, portal_name, server_name]:
+                    if self._term_matches(candidate, q_norm):
                         score += 55
 
             if score > best_score:
                 best_score = score
                 best = row
 
-        if not best or best_score < 50:
+        if not best or best_score < _MIN_MATCH_SCORE:
             return {"found": False, "source": "application_matrix", "message": "No se encontró relación en la matriz de aplicaciones."}
 
         return {
@@ -136,5 +164,3 @@ class ApplicationMatrixService:
 
 
 application_matrix_service = ApplicationMatrixService()
-
-

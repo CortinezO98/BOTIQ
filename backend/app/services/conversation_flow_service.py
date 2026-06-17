@@ -59,12 +59,19 @@ class ConversationFlowService:
         "bloqueo", "bloqueado", "login", "iniciar sesión", "iniciar sesion",
         "usuario bloqueado", "contraseña", "password", "credenciales", "portal"
     ]
+    # "lento"/"lentitud" se sacaron de aquí: por sí solos no implican que un
+    # aplicativo/portal esté caído, también describen un equipo lento (ver
+    # COMPUTER_KW). Como esta lista se evalúa PRIMERO en _detect_intent,
+    # tenerlos aquí hacía que CUALQUIER mensaje sobre lentitud del equipo
+    # (incluyendo preguntas de procedimiento sobre diagnóstico de SO) se
+    # clasificara como "app_down", exigiendo nombre de aplicativo/URL y
+    # alcance antes de responder, en vez de contestar la pregunta directamente.
     DOWN_KW = [
-        "caído", "caido", "no abre", "no carga", "no responde", "lento", "lentitud",
+        "caído", "caido", "no abre", "no carga", "no responde",
         "error 500", "error 501", "error 502", "error 503", "error 504", "gateway", "timeout"
     ]
     PRINTER_KW = ["impresora", "impresión", "impresion", "imprimir", "cola de impresión", "cola de impresion"]
-    COMPUTER_KW = ["computador", "pc", "equipo", "pantalla azul", "windows", "lento", "se reinicia", "teclado", "mouse"]
+    COMPUTER_KW = ["computador", "pc", "equipo", "pantalla azul", "windows", "lento", "lentitud", "se reinicia", "teclado", "mouse"]
     FILE_KW = ["archivo", "excel", "word", "pdf", "dañado", "danado", "no abre el archivo", "no guarda", "macro"]
     PROCEDURE_KW = ["procedimiento", "manual", "paso a paso", "cómo", "como", "guía", "guia", "instructivo"]
     SERVER_KW = ["servidor", "server", "cpu", "memoria", "ram", "disco", "ping", "infraestructura", "servicio"]
@@ -412,5 +419,3 @@ class ConversationFlowService:
 
 
 conversation_flow_service = ConversationFlowService()
-
-
