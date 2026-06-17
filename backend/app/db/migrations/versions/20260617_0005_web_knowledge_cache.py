@@ -66,3 +66,5 @@ def downgrade():
     tables = set(sa.inspect(bind).get_table_names())
     if "web_knowledge_cache" in tables:
         op.drop_table("web_knowledge_cache")
+
+

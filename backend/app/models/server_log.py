@@ -15,3 +15,5 @@ class ServerLog(Base):
     is_healthy = Column(Boolean, default=True)
     raw_data = Column(JSONB, nullable=True)
     queried_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+

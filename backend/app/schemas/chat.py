@@ -104,3 +104,5 @@ class AdminConversationLogItem(BaseModel):
     created_at: datetime
     ended_at: Optional[datetime] = None
     last_message: Optional[str] = None
+
+

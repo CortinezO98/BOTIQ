@@ -111,3 +111,5 @@ def downgrade():
     ]:
         if col in conv_columns:
             op.drop_column("conversations", col)
+
+

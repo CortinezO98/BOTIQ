@@ -39,6 +39,7 @@ from app.services.gcs_service import gcs_service
 from app.services.vertex.gemini_vision_service import gemini_vision_service
 from app.services.web_search_service import web_search_service
 from app.services.web_knowledge_cache_service import web_knowledge_cache_service
+from app.services.routing_policy_service import routing_policy_service
 
 router = APIRouter()
 
@@ -853,6 +854,15 @@ async def send_message(
         decision.slots = slots
         conversation.metadata_ = conversation_flow_service.merge_case_metadata(conversation.metadata_, decision)
 
+    routing_decision = routing_policy_service.classify_message(
+        message,
+        profile=conversation.selected_profile or "employee",
+        has_url=bool(detected_url),
+        has_ip=bool(detected_ip),
+        matrix_found=bool(matrix_result.get("found")),
+        case_type=decision.case_type,
+    )
+
     # Si el flujo necesita datos mínimos, primero pregunta y NO quema tokens de RAG/Gemini innecesariamente.
     if decision.direct_response and decision.intent not in {"ticket_confirmation"}:
         db.add(
@@ -867,6 +877,7 @@ async def send_message(
                     "question_number": conversation.question_count,
                     "flow_decision": decision.__dict__,
                     "matrix_result": matrix_result,
+                    "routing_decision": routing_decision,
                 },
             )
         )
@@ -943,10 +954,13 @@ async def send_message(
     app_status_text = ""
 
     should_check_status = (
-        decision.should_check_status
-        or bool(detected_url or detected_ip)
-        or chat_guard_service.asks_about_url_or_service(message)
-        or bool(matrix_result.get("found"))
+        routing_decision.get("use_status", False)
+        and (
+            decision.should_check_status
+            or bool(detected_url or detected_ip)
+            or chat_guard_service.asks_about_url_or_service(message)
+            or bool(matrix_result.get("found"))
+        )
     )
 
     if should_check_status:
@@ -976,6 +990,7 @@ async def send_message(
                 "application_status": app_status,
                 "matrix_result": matrix_result,
                 "flow_decision": decision.__dict__,
+                "routing_decision": routing_decision,
             },
         )
     )
@@ -997,11 +1012,25 @@ async def send_message(
     if internal_context_parts:
         enriched_message = f"{message}\n\nInformación interna consultada por BOTIQ:\n" + "\n\n".join(internal_context_parts)
 
-    # Empleado: base de conocimiento + FAQs + estado interno.
-    # Ingeniero: FAQs + base de conocimiento técnica + estado/matriz.
+    # Empleado: primero FAQ/cache; RAG solo si el enrutador lo autoriza.
+    # Ingeniero: RAG técnico cuando aplica, pero se omite para ofimática general sin señales internas.
     if module == ModuleType.EMPLOYEE:
         faq = await employee_bot_service.get_faq_answer(message, db)
-        rag_result = await support_rag_service.generate_response(enriched_message, image_analysis=image_analysis)
+
+        if routing_decision.get("use_rag", True):
+            rag_result = await support_rag_service.generate_response(enriched_message, image_analysis=image_analysis)
+        else:
+            rag_result = {
+                "text": "RAG omitido por política de enrutamiento para ahorrar tokens y evitar fuentes internas irrelevantes.",
+                "sources": [],
+                "avg_confidence": 0,
+                "best_confidence": 0,
+                "knowledge_gap": True,
+                "tokens_used": 0,
+                "response_time_ms": 0,
+                "skipped_by_routing": True,
+            }
+
         bot_result = _compose_unified_answer(
             profile="employee",
             decision=decision,
@@ -1013,7 +1042,21 @@ async def send_message(
         )
     elif module == ModuleType.SUPPORT_RAG:
         faq = await employee_bot_service.get_faq_answer(message, db)
-        rag_result = await support_rag_service.generate_response(enriched_message, image_analysis=image_analysis)
+
+        if routing_decision.get("use_rag", True):
+            rag_result = await support_rag_service.generate_response(enriched_message, image_analysis=image_analysis)
+        else:
+            rag_result = {
+                "text": "RAG omitido por política de enrutamiento para ahorrar tokens y evitar fuentes internas irrelevantes.",
+                "sources": [],
+                "avg_confidence": 0,
+                "best_confidence": 0,
+                "knowledge_gap": True,
+                "tokens_used": 0,
+                "response_time_ms": 0,
+                "skipped_by_routing": True,
+            }
+
         bot_result = _compose_unified_answer(
             profile="support_engineer",
             decision=decision,
@@ -1058,7 +1101,7 @@ async def send_message(
     used_resolution_source = bool(
         app_status
         or faq
-        or (rag_result and not rag_result.get("knowledge_gap"))
+        or (rag_result and not rag_result.get("knowledge_gap") and not rag_result.get("skipped_by_routing"))
         or matrix_result.get("found")
         or image_analysis
     )
@@ -1118,6 +1161,7 @@ async def send_message(
                 "resolution_attempts": conversation.resolution_attempts,
                 "ticket_eligible": conversation.ticket_eligible,
                 "flow_decision": decision.__dict__,
+                "routing_decision": routing_decision,
             },
         )
     )
@@ -1181,3 +1225,5 @@ async def end_session(
         await db.commit()
 
     return {"message": "Sesión cerrada", "session_id": session_id}
+
+

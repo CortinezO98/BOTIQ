@@ -17,3 +17,5 @@ def test_permissions():
     assert can_access_module(UserRole.EMPLOYEE,"employee_chat")
     assert not can_access_module(UserRole.EMPLOYEE,"support_rag")
     assert can_access_module(UserRole.ADMIN,"dashboard")
+
+

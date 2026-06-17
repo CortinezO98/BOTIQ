@@ -25,3 +25,5 @@ class EmbeddingsService:
 
 
 embeddings_service = EmbeddingsService()
+
+

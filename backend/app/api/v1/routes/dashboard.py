@@ -82,3 +82,5 @@ async def escalation_rate(days: int = Query(30), _: User = Depends(require_admin
     total = (await db.execute(select(func.count(Conversation.id)).where(Conversation.created_at >= start))).scalar() or 0
     esc = (await db.execute(select(func.count(Conversation.id)).where(Conversation.escalated_to_aranda == True, Conversation.created_at >= start))).scalar() or 0
     return EscalationRate(total=total, escalated=esc, rate_pct=round((esc/total*100), 2) if total > 0 else 0.0)
+
+

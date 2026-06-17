@@ -14,3 +14,5 @@ class AuditLog(Base):
     user_agent = Column(String(255), nullable=True)
     metadata_ = Column("metadata", JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+
+

@@ -418,14 +418,26 @@ class SupportRAGService:
                 "response_time_ms": 0,
             }
 
-        context = "\n\n---\n\n".join([f"[Fuente: {c['source']}]\n{c['content']}" for c in chunks])
+        selected_chunks = chunks[: max(1, settings.RAG_MAX_CHUNKS_TO_PROMPT)]
+        context_parts = []
+        remaining = max(1000, settings.RAG_MAX_CONTEXT_CHARS)
+        for c in selected_chunks:
+            block = f"[Fuente: {c['source']}]\n{c['content']}"
+            if len(block) > remaining:
+                block = block[:remaining]
+            context_parts.append(block)
+            remaining -= len(block)
+            if remaining <= 0:
+                break
+
+        context = "\n\n---\n\n".join(context_parts)
         result = await gemini_text_service.generate(
             prompt=q,
             system_instruction=RAG_SYSTEM.format(knowledge_context=context),
             history=history,
-            temperature=0.2,
-            max_output_tokens=max(settings.MAX_OUTPUT_TOKENS, 1536),
-            model=settings.VERTEX_REASONING_MODEL,
+            temperature=0.15,
+            max_output_tokens=settings.RAG_ANSWER_MAX_OUTPUT_TOKENS,
+            model=settings.VERTEX_FAST_MODEL,
         )
 
         if not result.get("success", True):
@@ -450,10 +462,13 @@ class SupportRAGService:
             "knowledge_gap": False,
         }
 
-    def _chunk_text(self, text: str, chunk_size: int = 500) -> List[str]:
+    def _chunk_text(self, text: str, chunk_size: int = None) -> List[str]:
+        chunk_size = chunk_size or settings.RAG_CHUNK_SIZE_WORDS
         words = text.split()
         return [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size) if words[i:i + chunk_size]]
 
 
 support_rag_service = SupportRAGService()
+
+
 

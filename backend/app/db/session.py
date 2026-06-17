@@ -34,3 +34,5 @@ async def get_db():
             raise
         finally:
             await session.close()
+
+

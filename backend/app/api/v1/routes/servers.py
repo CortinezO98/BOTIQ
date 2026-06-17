@@ -16,3 +16,5 @@ async def get_analysis(_: User = Depends(require_support)):
     return await server_monitor_service.analyze_and_respond(
         "Dame un resumen del estado actual de todos los servidores"
     )
+
+

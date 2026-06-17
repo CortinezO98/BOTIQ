@@ -33,10 +33,25 @@ class Settings(BaseSettings):
     def VERTEX_VISION_MODEL(self) -> str:
         return self.VERTEX_MULTIMODAL_MODEL
 
-    RAG_TOP_K: int = 5
+    # Controles de IA / tokens.
+    # Se reducen por defecto para evitar consumos altos en Vertex.
+    RAG_TOP_K: int = 4
     RAG_MIN_CONFIDENCE: float = 0.72
-    MAX_OUTPUT_TOKENS: int = 1024
+    MAX_OUTPUT_TOKENS: int = 700
     VERTEX_TIMEOUT_SECONDS: int = 30
+
+    # Optimización de RAG: menos chunks y contexto más corto.
+    RAG_MAX_CHUNKS_TO_PROMPT: int = 4
+    RAG_MAX_CONTEXT_CHARS: int = 5000
+    RAG_CHUNK_SIZE_WORDS: int = 280
+    RAG_ANSWER_MAX_OUTPUT_TOKENS: int = 800
+    WEB_ANSWER_MAX_OUTPUT_TOKENS: int = 700
+
+    # Evita gasto en Gemini para clasificar intención cuando bastan reglas.
+    INTENT_CLASSIFIER_USE_GEMINI: bool = False
+
+    # Si es consulta general de Excel/Word/Outlook/etc. se omite RAG interno.
+    EMPLOYEE_GENERAL_TECH_SKIP_RAG: bool = True
 
     # Búsqueda web controlada: solo fallback para soporte técnico general, nunca para datos internos.
     WEB_SEARCH_ENABLED: bool = False
@@ -146,3 +161,5 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+

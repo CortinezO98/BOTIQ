@@ -17,3 +17,5 @@ async def test_chat_401(client):
 @pytest.mark.asyncio
 async def test_dashboard_401(client):
     r=await client.get("/api/v1/dashboard/metrics"); assert r.status_code==401
+
+

@@ -99,3 +99,5 @@ class ApplicationStatusService:
 
 
 application_status_service = ApplicationStatusService()
+
+

@@ -46,3 +46,5 @@ class WebKnowledgeApproveRequest(BaseModel):
 
 class WebKnowledgeRejectRequest(BaseModel):
     reason: Optional[str] = None
+
+

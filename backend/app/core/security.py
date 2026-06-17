@@ -39,3 +39,5 @@ def decode_token(token: str) -> dict:
         return {"user_id": user_id, "role": payload.get("role")}
     except JWTError:
         raise exc
+
+

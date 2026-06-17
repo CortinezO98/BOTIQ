@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 from app.models.conversation import ModuleType
+from app.core.config import settings
 
 SERVER_KW = {"servidor","server","caído","caido","down","memoria","cpu","disco","infraestructura",
              "máquina","ambiente","productivo","latencia","lento","no responde","uptime","ping"}
@@ -37,6 +38,9 @@ class IntentClassifierService:
             else:
                 return IntentResult(ModuleType.EMPLOYEE, min(0.95, 0.6+emp*0.1), "keyword", f"{emp} keywords de empleado")
 
+        if not settings.INTENT_CLASSIFIER_USE_GEMINI:
+            return IntentResult(ModuleType.SUPPORT_RAG, 0.45, "rule_fallback", "Clasificador Gemini desactivado para ahorrar tokens")
+
         try:
             return await self._gemini_classify(message)
         except Exception as e:
@@ -66,3 +70,5 @@ class IntentClassifierService:
 
 
 intent_classifier_service = IntentClassifierService()
+
+

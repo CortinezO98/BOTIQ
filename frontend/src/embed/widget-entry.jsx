@@ -28,3 +28,5 @@ window.BotiqWidget = {
   },
   destroy() { this._root?.unmount(); document.getElementById("botiq-root")?.remove(); },
 };
+
+

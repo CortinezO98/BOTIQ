@@ -18,3 +18,5 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
     conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
+
+

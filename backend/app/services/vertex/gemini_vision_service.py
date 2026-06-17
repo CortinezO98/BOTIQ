@@ -28,3 +28,5 @@ class GeminiVisionService:
 
 
 gemini_vision_service = GeminiVisionService()
+
+

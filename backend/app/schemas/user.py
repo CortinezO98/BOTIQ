@@ -36,3 +36,5 @@ class AdminUpdateUser(BaseModel):
 
 class AdminChangeRole(BaseModel):
     role: UserRole
+
+

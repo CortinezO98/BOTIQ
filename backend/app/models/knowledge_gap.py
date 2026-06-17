@@ -16,3 +16,5 @@ class KnowledgeGap(Base):
     status = Column(String(50), default="open")
     suggested_document = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+

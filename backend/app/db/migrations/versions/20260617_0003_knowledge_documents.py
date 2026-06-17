@@ -49,3 +49,5 @@ def downgrade():
     tables = set(sa.inspect(bind).get_table_names())
     if "knowledge_documents" in tables:
         op.drop_table("knowledge_documents")
+
+

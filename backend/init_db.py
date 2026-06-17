@@ -48,3 +48,5 @@ def stamp_alembic_head():
 if __name__ == "__main__":
     asyncio.run(init_db())
     stamp_alembic_head()
+
+

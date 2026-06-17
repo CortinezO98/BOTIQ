@@ -9,3 +9,5 @@ def test_chunk_text():
 
 def test_chunk_empty():
     assert SupportRAGService()._chunk_text("")==[]
+
+

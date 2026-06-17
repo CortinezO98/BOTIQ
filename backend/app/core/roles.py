@@ -29,3 +29,5 @@ MODULE_PERMISSIONS = {
 
 def can_access_module(user_role: UserRole, module: str) -> bool:
     return user_role in MODULE_PERMISSIONS.get(module, [])
+
+

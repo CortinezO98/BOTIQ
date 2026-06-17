@@ -16,3 +16,5 @@ Componentes React:
 
 Favicon:
 - `frontend/public/favicon.svg`
+
+

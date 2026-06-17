@@ -80,3 +80,5 @@ async def delete_faq(
     faq.is_active = False
     await db.commit()
     return {"message": "FAQ desactivada", "faq_id": str(faq_id)}
+
+

@@ -49,3 +49,5 @@ class EscalationRate(BaseModel):
     total: int
     escalated: int
     rate_pct: float
+
+

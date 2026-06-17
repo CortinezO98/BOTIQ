@@ -92,3 +92,5 @@ async def kb_reindex_document(
 ):
     """Reindexa un único documento por su file_id de Google Drive."""
     return await support_rag_service.reindex_document(db, file_id)
+
+

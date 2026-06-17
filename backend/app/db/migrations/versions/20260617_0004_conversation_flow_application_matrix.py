@@ -61,3 +61,5 @@ def downgrade():
     tables = set(sa.inspect(bind).get_table_names())
     if "application_matrix" in tables:
         op.drop_table("application_matrix")
+
+

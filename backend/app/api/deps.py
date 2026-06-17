@@ -38,3 +38,5 @@ def require_role(minimum_role: UserRole):
 require_employee = require_role(UserRole.EMPLOYEE)
 require_support = require_role(UserRole.SUPPORT_ENGINEER)
 require_admin = require_role(UserRole.ADMIN)
+
+

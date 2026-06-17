@@ -30,3 +30,5 @@ class DocumentAIService:
 
 
 document_ai_service = DocumentAIService()
+
+

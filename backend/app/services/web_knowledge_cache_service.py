@@ -144,12 +144,12 @@ class WebKnowledgeCacheService:
         prompt = (
             f"Consulta del usuario: {question}\n\n"
             f"Referencias públicas consultadas:\n{web_context}\n\n"
-            "Genera una respuesta desde varios puntos de vista útiles para soporte:\n"
-            "1. Posible causa.\n"
-            "2. Validaciones iniciales.\n"
-            "3. Pasos seguros para el usuario.\n"
-            "4. Cuándo debe escalarse a soporte/Aranda.\n"
-            "5. Resumen corto que pueda registrarse luego como FAQ.\n"
+            "Genera una respuesta útil y breve para mesa de ayuda:\n"
+            "1. Causa probable.\n"
+            "2. Pasos seguros para el usuario.\n"
+            "3. Cuándo escalar a soporte/Aranda.\n"
+            "4. Resumen corto para futura FAQ.\n"
+            "Máximo 450 palabras.\n"
         )
         if image_analysis:
             prompt += f"\nContexto de imagen/captura enviada por el usuario:\n{image_analysis}\n"
@@ -157,9 +157,9 @@ class WebKnowledgeCacheService:
         result = await gemini_text_service.generate(
             prompt=prompt,
             system_instruction=system_instruction,
-            temperature=0.2,
-            model=settings.VERTEX_REASONING_MODEL,
-            max_output_tokens=min(settings.MAX_OUTPUT_TOKENS, 1200),
+            temperature=0.15,
+            model=settings.VERTEX_FAST_MODEL,
+            max_output_tokens=settings.WEB_ANSWER_MAX_OUTPUT_TOKENS,
         )
         return result
 
@@ -295,3 +295,5 @@ class WebKnowledgeCacheService:
 
 
 web_knowledge_cache_service = WebKnowledgeCacheService()
+
+

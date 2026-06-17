@@ -10,3 +10,5 @@ router.include_router(support.router, prefix="/support", tags=["Soporte RAG"])
 router.include_router(servers.router, prefix="/servers", tags=["Servidores"])
 router.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
 router.include_router(admin.router, prefix="/admin", tags=["Administración"])
+
+

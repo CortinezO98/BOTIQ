@@ -179,3 +179,5 @@ def downgrade():
     messagerole_enum.drop(bind, checkfirst=True)
     moduletype_enum.drop(bind, checkfirst=True)
     userrole_enum.drop(bind, checkfirst=True)
+
+
