@@ -73,7 +73,9 @@ class Settings(BaseSettings):
     # seguiría yendo a "no encontré información" para no inventar sobre
     # aplicativos/portales internos que el modelo no conoce).
     GENERAL_AI_FALLBACK_ENABLED: bool = True
-    GENERAL_AI_ANSWER_MAX_OUTPUT_TOKENS: int = 500
+    # Aumentado de 500 a 800: las respuestas de paso a paso para impresoras,
+    # Excel, etc. se cortaban a mitad de frase con 500 tokens.
+    GENERAL_AI_ANSWER_MAX_OUTPUT_TOKENS: int = 800
 
     DOCUMENT_AI_PROCESSOR_ID: str = ""
     DOCUMENT_AI_LOCATION: str = "us"
@@ -131,6 +133,14 @@ class Settings(BaseSettings):
     )
 
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:5180,http://localhost:5190,http://localhost:3000"
+
+    # ── Rate limiting ──────────────────────────────────────────────────────────
+    # Límites por IP. Formato: "N/period" (slowapi/limits).
+    # En producción se recomienda bajar LOGIN_RATE_LIMIT a "5/minute".
+    RATE_LIMIT_ENABLED: bool = True
+    LOGIN_RATE_LIMIT: str = "10/minute"      # /auth/login y /auth/register
+    CHAT_RATE_LIMIT: str = "30/minute"       # /chat/message
+    API_RATE_LIMIT: str = "120/minute"       # resto de endpoints autenticados
 
     def get_allowed_origins(self) -> List[str]:
         return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]

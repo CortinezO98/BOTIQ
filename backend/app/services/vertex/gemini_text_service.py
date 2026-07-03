@@ -2,7 +2,10 @@ import time
 from typing import Dict, List, Optional
 
 from app.core.config import settings
+from app.core.logging_config import get_logger
 from app.services.vertex.vertex_client import is_vertex_available
+
+logger = get_logger(__name__, service="gemini")
 
 DEMO_RESPONSE = (
     "Estoy en modo demo. Para activar respuestas con IA configura "
@@ -94,9 +97,7 @@ class GeminiTextService:
                         try:
                             history_fmt.append(Content(role=role, parts=[Part.from_text(content)]))
                         except Exception as exc:  # noqa: BLE001
-                            # Un turno de historial mal formado no debe tumbar
-                            # toda la conversación; se descarta solo ese turno.
-                            print(f"Gemini history skip: {exc}")
+                            logger.warning("gemini_history_skip", error=str(exc), role=role)
 
             chat = gm.start_chat(history=history_fmt, response_validation=False)
             resp = await chat.send_message_async(prompt, generation_config=cfg)
@@ -122,11 +123,17 @@ class GeminiTextService:
                 "finish_reason": finish,
             }
         except Exception as exc:  # noqa: BLE001
-            print(f"Gemini error: {exc}")
+            elapsed = (time.time() - start) * 1000
+            logger.error(
+                "gemini_error",
+                error=str(exc),
+                model=model or settings.VERTEX_GEMINI_MODEL,
+                latency_ms=round(elapsed),
+            )
             return {
                 "text": "No pude generar una respuesta con IA en este momento.",
                 "tokens_used": 0,
-                "response_time_ms": (time.time() - start) * 1000,
+                "response_time_ms": elapsed,
                 "success": False,
                 "finish_reason": "exception",
                 "error": str(exc),

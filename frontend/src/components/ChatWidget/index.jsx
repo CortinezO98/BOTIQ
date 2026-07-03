@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "react";
 import { useChat } from "../../hooks/useChat";
 import { supportAPI } from "../../services/api";
 import BotiqAvatar from "../Brand/BotiqAvatar";
@@ -26,6 +25,8 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [networkUsername, setNetworkUsername] = useState("");
   const [profileError, setProfileError] = useState("");
+  const [showSatisfaction, setShowSatisfaction] = useState(false);
+  const [aiAvailable, setAiAvailable] = useState(true);
 
   const {
     messages,
@@ -35,6 +36,8 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
     startSession,
     sendMessage,
     clearChat,
+    submitFeedback,
+    submitSatisfaction,
   } = useChat();
 
   const bottomRef = useRef(null);
@@ -47,10 +50,24 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
   useEffect(() => {
     if (open) {
       supportAPI.status().then((r) => setKbStatus(r.data)).catch(() => {});
+      // Verificar disponibilidad de Vertex AI
+      fetch("/health")
+        .then((r) => r.json())
+        .then((data) => setAiAvailable(data.ai_available !== false))
+        .catch(() => setAiAvailable(true)); // asumir disponible si falla el check
     }
   }, [open]);
 
   const resetLocalFlow = async () => {
+    // Si hay una sesión activa con mensajes, mostrar encuesta de satisfacción primero
+    if (session && messages.length > 1) {
+      setShowSatisfaction(true);
+      return;
+    }
+    await _doReset();
+  };
+
+  const _doReset = async () => {
     await clearChat();
     setSelectedProfile(null);
     setNetworkUsername("");
@@ -58,6 +75,12 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
     setInput("");
     setImgFile(null);
     setImgPreview(null);
+    setShowSatisfaction(false);
+  };
+
+  const handleSatisfaction = async (score, comment) => {
+    await submitSatisfaction(score, comment);
+    await _doReset();
   };
 
   const configureProfile = async (profile) => {
@@ -156,6 +179,21 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
         </div>
       )}
 
+      {!aiAvailable && (
+        <div style={{
+          background: "#fef9c3",
+          borderBottom: "1px solid #fde047",
+          padding: "8px 16px",
+          fontSize: 12,
+          color: "#713f12",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+        }}>
+          ⚠️ <strong>IA no disponible</strong> — operando en modo limitado. Las respuestas pueden ser básicas.
+        </div>
+      )}
+
       <div className="botiq-chat-content">
         {!session && (
           <ProfileSelector
@@ -172,7 +210,14 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
 
         {session && <SessionBanner session={session} status={sessionStatus} />}
 
-        {session && messages.map((msg) => <Bubble key={msg.id} msg={msg} primaryColor={primaryColor} />)}
+        {session && messages.map((msg) => (
+          <Bubble
+            key={msg.id}
+            msg={msg}
+            primaryColor={primaryColor}
+            onFeedback={(rating) => submitFeedback(msg.id, rating)}
+          />
+        ))}
 
         {session && quickQuestions.length > 0 && messages.length <= 1 && !loading && (
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -195,6 +240,14 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
 
         <div ref={bottomRef} />
       </div>
+
+      {showSatisfaction && (
+        <SatisfactionModal
+          primaryColor={primaryColor}
+          onSubmit={handleSatisfaction}
+          onSkip={_doReset}
+        />
+      )}
 
       {session && imgPreview && (
         <div style={{ padding: "6px 14px", background: "#f9f9fc", borderTop: `1px solid ${primaryColor}15` }}>
@@ -405,9 +458,10 @@ function Composer({ input, setInput, send, handleKey, fileRef, handleFile, loadi
   );
 }
 
-function Bubble({ msg, primaryColor }) {
+function Bubble({ msg, primaryColor, onFeedback }) {
   const isUser = msg.role === "user";
   const mod = MODULE_INFO[msg.meta?.module];
+  const rated = msg.meta?.userRating;
 
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexDirection: isUser ? "row-reverse" : "row" }}>
@@ -429,7 +483,7 @@ function Bubble({ msg, primaryColor }) {
           {msg.content}
         </div>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4, alignItems: "center" }}>
           {mod && !isUser && <Meta color={mod.color}>{mod.icon} {mod.label}</Meta>}
           {msg.meta?.questionCount !== undefined && <Meta>{msg.meta.questionCount}/{msg.meta.maxQuestions} preguntas</Meta>}
           {msg.meta?.applicationStatus && <Meta color="#0284c7">🔎 estado consultado</Meta>}
@@ -438,11 +492,142 @@ function Bubble({ msg, primaryColor }) {
           {msg.meta?.ticketEligible && <Meta color="#d97706">🎫 ticket elegible</Meta>}
           {msg.meta?.arandaTicketId && <Meta color="#059669">Aranda: {msg.meta.arandaTicketId}</Meta>}
           {msg.meta?.sessionStatus && msg.meta.sessionStatus !== "active" && <Meta color="#dc2626">Sesión finalizada</Meta>}
+
+          {/* Botones 👍/👎 — solo en mensajes del asistente no-sistema */}
+          {!isUser && !msg.meta?.system && onFeedback && (
+            <div style={{ display: "flex", gap: 3, marginLeft: "auto" }}>
+              <button
+                title="Útil"
+                onClick={() => onFeedback("up")}
+                style={{
+                  background: rated === "up" ? "#d1fae5" : "transparent",
+                  border: `1px solid ${rated === "up" ? "#059669" : "#e5e7eb"}`,
+                  borderRadius: 6,
+                  padding: "2px 6px",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  color: rated === "up" ? "#059669" : "#9ca3af",
+                  lineHeight: 1,
+                }}
+              >
+                👍
+              </button>
+              <button
+                title="No útil"
+                onClick={() => onFeedback("down")}
+                style={{
+                  background: rated === "down" ? "#fee2e2" : "transparent",
+                  border: `1px solid ${rated === "down" ? "#dc2626" : "#e5e7eb"}`,
+                  borderRadius: 6,
+                  padding: "2px 6px",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  color: rated === "down" ? "#dc2626" : "#9ca3af",
+                  lineHeight: 1,
+                }}
+              >
+                👎
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
+
+
+function SatisfactionModal({ primaryColor, onSubmit, onSkip }) {
+  const [selected, setSelected] = useState(null);
+  const [comment, setComment] = useState("");
+
+  const options = [
+    { score: 1, emoji: "✅", label: "Sí, resolvió mi problema" },
+    { score: 2, emoji: "⚠️", label: "Parcialmente" },
+    { score: 3, emoji: "❌", label: "No resolvió" },
+  ];
+
+  return (
+    <div style={{
+      position: "absolute", inset: 0,
+      background: "rgba(255,255,255,0.96)",
+      backdropFilter: "blur(4px)",
+      display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center",
+      padding: 24, zIndex: 10, gap: 12,
+      borderRadius: "inherit",
+    }}>
+      <div style={{ fontSize: 28 }}>⭐</div>
+      <p style={{ fontWeight: 800, fontSize: 15, color: primaryColor, textAlign: "center", margin: 0 }}>
+        ¿Fue útil la atención?
+      </p>
+      <p style={{ fontSize: 12, color: "#6b6b8a", textAlign: "center", margin: 0 }}>
+        Tu calificación ayuda a mejorar BOTIQ
+      </p>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+        {options.map((opt) => (
+          <button
+            key={opt.score}
+            onClick={() => setSelected(opt.score)}
+            style={{
+              border: `1.5px solid ${selected === opt.score ? primaryColor : "#e5e7eb"}`,
+              borderRadius: 10,
+              padding: "10px 14px",
+              background: selected === opt.score ? `${primaryColor}12` : "#fff",
+              color: selected === opt.score ? primaryColor : "#374151",
+              cursor: "pointer",
+              fontWeight: selected === opt.score ? 700 : 400,
+              fontSize: 13,
+              textAlign: "left",
+              display: "flex", alignItems: "center", gap: 8,
+            }}
+          >
+            <span>{opt.emoji}</span> {opt.label}
+          </button>
+        ))}
+      </div>
+
+      <textarea
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        placeholder="Comentario opcional..."
+        rows={2}
+        style={{
+          width: "100%", border: "1px solid #e5e7eb", borderRadius: 8,
+          padding: "8px 10px", fontSize: 12, resize: "none", outline: "none",
+          boxSizing: "border-box",
+        }}
+      />
+
+      <div style={{ display: "flex", gap: 8, width: "100%" }}>
+        <button
+          onClick={onSkip}
+          style={{
+            flex: 1, border: "1px solid #e5e7eb", borderRadius: 8,
+            padding: "9px 0", background: "#fff", color: "#6b6b8a",
+            cursor: "pointer", fontSize: 13,
+          }}
+        >
+          Omitir
+        </button>
+        <button
+          disabled={!selected}
+          onClick={() => onSubmit(selected, comment || null)}
+          style={{
+            flex: 2, borderRadius: 8, border: "none",
+            padding: "9px 0",
+            background: selected ? `linear-gradient(135deg, ${primaryColor}, #3a3490)` : "#d1d5db",
+            color: "#fff", cursor: selected ? "pointer" : "not-allowed",
+            fontWeight: 700, fontSize: 13,
+          }}
+        >
+          Enviar calificación
+        </button>
+      </div>
+    </div>
+  );
+}}
 
 function Meta({ children, color = "#6b6b8a" }) {
   return <span style={{ fontSize: 10, color }}>{children}</span>;
@@ -540,5 +725,6 @@ const closeImageBtn = {
   color: "#fff",
   fontSize: 11,
 };
+
 
 

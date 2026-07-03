@@ -1,4 +1,3 @@
-import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -131,6 +130,21 @@ export default function Dashboard() {
         <KPI label="Conversaciones" value={metrics.total_conversations ?? 0} icon="💬" color="#272163" />
         <KPI label="Mensajes totales" value={metrics.total_messages ?? 0} icon="📩" color="#4f46e5" />
         <KPI label="Tokens Vertex AI" value={(metrics.total_tokens_used ?? 0).toLocaleString()} icon="⚡" color="#7c3aed" />
+        <KPI
+          label="Costo estimado (COP)"
+          value={(() => {
+            // Gemini 2.5 Flash: ~$0.30 USD/M tokens entrada + $2.50 USD/M salida
+            // Estimación conservadora mezclada ~$0.50 USD/M tokens
+            // TRM referencia: $4.200 COP/USD (actualizar en settings o .env si se desea)
+            const tokens = metrics.total_tokens_used ?? 0;
+            const usd = (tokens / 1_000_000) * 0.50;
+            const cop = usd * 4200;
+            return cop < 1 ? "< $1" : `$${Math.round(cop).toLocaleString("es-CO")}`;
+          })()}
+          icon="🇨🇴"
+          color="#059669"
+          subtitle="estimado"
+        />
         <KPI label="Resp. prom. (ms)" value={Math.round(metrics.avg_response_time_ms ?? 0)} icon="⏱️" color="#0284c7" />
         <KPI label="Escalados Aranda" value={metrics.escalations_to_aranda ?? 0} icon="🎫" color="#059669" />
         <KPI label="Brechas RAG" value={metrics.open_knowledge_gaps ?? 0} icon="🧠" color="#d97706" />
@@ -228,12 +242,13 @@ export default function Dashboard() {
   );
 }
 
-function KPI({ label, value, icon, color }) {
+function KPI({ label, value, icon, color, subtitle }) {
   return (
     <article style={{ ...kpiCard, borderTop: `3px solid ${color}` }}>
       <div style={{ ...kpiIcon, color, background: `${color}10` }}>{icon}</div>
       <strong style={kpiValue}>{value}</strong>
       <span style={kpiLabel}>{label}</span>
+      {subtitle && <span style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>{subtitle}</span>}
     </article>
   );
 }
@@ -437,6 +452,9 @@ if (typeof document !== "undefined" && !document.getElementById("botiq-dashboard
   `;
   document.head.appendChild(style);
 }
+
+
+
 
 
 

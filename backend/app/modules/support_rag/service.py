@@ -1,4 +1,3 @@
-import hashlib
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
@@ -6,10 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.logging_config import get_logger
 from app.models.knowledge_document import KnowledgeDocument
 from app.services.gdrive_service import gdrive_service
 from app.services.vertex.embeddings_service import embeddings_service
 from app.services.vertex.gemini_text_service import gemini_text_service
+
+logger = get_logger(__name__, module="support_rag")
 
 RAG_SYSTEM = """Eres BOTIQ en modo Ingeniero de Soporte.
 
@@ -24,15 +26,12 @@ Alcance:
 
 Reglas:
 1. Responde SOLO con base en el contexto y la información operativa interna recibida.
-2. Si citas una fuente, menciona solo el nombre del documento en una línea al final
-   (ej. "Fuente: Anexo 19"), en texto plano, SIN corchetes ni el marcador "### Documento:".
-   Nunca copies literalmente los encabezados que ves en "Base de conocimiento disponible".
+2. Si citas una fuente, menciona solo el nombre del documento en una línea al final (ej. "Fuente: Anexo 19"), en texto plano, SIN corchetes ni el marcador "### Documento:". Nunca copies literalmente los encabezados que ves en "Base de conocimiento disponible".
 3. Si el contexto no es suficiente, dilo claramente.
 4. Da pasos numerados y accionables.
 5. No respondas temas ajenos al negocio ni información no relacionada con IQ.
 6. Si se debe escalar, explica qué validaciones ya se deberían tener antes de crear ticket.
-7. Sé breve: máximo 2-3 párrafos cortos o una lista de pasos. No repitas la pregunta
-   del usuario ni reproduzcas el contexto recibido.
+7. Sé breve: máximo 2-3 párrafos cortos o una lista de pasos. No repitas la pregunta del usuario ni reproduzcas el contexto recibido.
 """
 
 
@@ -166,7 +165,7 @@ class SupportRAGService:
                 if local_text:
                     return local_text
             except Exception as exc:
-                print(f"⚠️  PDF local extraction error en {doc.get('name')}: {exc}")
+                logger.warning("pdf_extraction_error", doc=doc.get("name"), error=str(exc))
 
             # 2) PDF escaneado / imagen: Document AI
             try:
@@ -176,7 +175,7 @@ class SupportRAGService:
                 if text and text.strip():
                     return text.strip()
             except Exception as exc:
-                print(f"⚠️  Document AI extraction error en {doc.get('name')}: {exc}")
+                logger.warning("documentai_extraction_error", doc=doc.get("name"), error=str(exc))
 
             return ""
 
@@ -187,7 +186,7 @@ class SupportRAGService:
         try:
             collection.delete(where={"file_id": file_id})
         except Exception as exc:  # noqa: BLE001
-            print(f"⚠️  No se pudieron borrar chunks previos de {file_id}: {exc}")
+            logger.warning("chroma_delete_failed", file_id=file_id, error=str(exc))
 
     async def _index_document(self, collection, doc: Dict, text: str) -> int:
         """Crea embeddings y hace upsert de los chunks de un documento. Devuelve nº de chunks."""
@@ -221,8 +220,7 @@ class SupportRAGService:
         """
         Sincroniza la base de conocimiento desde Google Drive de forma INCREMENTAL.
 
-        - Procesa solo documentos nuevos o cuyo contenido cambió (hash distinto),
-          salvo que force=True (reindexa todo).
+        - Procesa solo documentos nuevos o cuyo contenido cambió (hash distinto), salvo que force=True (reindexa todo).
         - Marca como 'skipped' los que no cambiaron (sin gastar embeddings).
         - Elimina de ChromaDB y de la tabla los documentos que ya no están en Drive.
         - Guarda estado, nº de chunks y errores por documento en knowledge_documents.
@@ -252,7 +250,7 @@ class SupportRAGService:
             try:
                 text = await self._extract_text(doc)
                 if not text.strip():
-                    print(f"⚠️  {doc['name']}: sin contenido extraíble")
+                    logger.warning("doc_no_content", doc=doc["name"])
                     self._upsert_doc_record(
                         db, row, doc, content_hash=None, chunk_count=0,
                         status="failed", error="Sin contenido extraíble",
@@ -271,7 +269,7 @@ class SupportRAGService:
                     # No cambió: no se reindexa (ahorra embeddings).
                     self._touch_doc_record(row, status="indexed")
                     skipped += 1
-                    print(f"⏭️  {doc['name']}: sin cambios, omitido")
+                    logger.debug("doc_skipped_unchanged", doc=doc["name"])
                     continue
 
                 chunk_count = await self._index_document(collection, doc, text)
@@ -281,13 +279,13 @@ class SupportRAGService:
                 )
                 if row is None:
                     indexed += 1
-                    print(f"✅ {doc['name']}: {chunk_count} chunks indexados (nuevo)")
+                    logger.info("doc_indexed", doc=doc["name"], chunks=chunk_count, action="new")
                 else:
                     updated += 1
-                    print(f"♻️  {doc['name']}: {chunk_count} chunks reindexados")
+                    logger.info("doc_indexed", doc=doc["name"], chunks=chunk_count, action="reindexed")
 
             except Exception as exc:  # noqa: BLE001
-                print(f"❌ Error procesando {doc.get('name')}: {exc}")
+                logger.error("doc_processing_error", doc=doc.get("name"), error=str(exc))
                 self._upsert_doc_record(
                     db, row, doc, content_hash=None, chunk_count=(row.chunk_count if row else 0),
                     status="failed", error=str(exc),
@@ -301,7 +299,7 @@ class SupportRAGService:
                 self._delete_chunks_for_file(collection, file_id)
                 await db.delete(row)
                 removed += 1
-                print(f"🗑️  {row.file_name}: eliminado (ya no está en Drive)")
+                logger.info("doc_removed_from_index", doc=row.file_name)
 
         await db.commit()
 
@@ -434,7 +432,7 @@ class SupportRAGService:
             chunks.sort(key=lambda x: x["relevance_score"], reverse=True)
             return chunks
         except Exception as exc:  # noqa: BLE001
-            print(f"ChromaDB error: {exc}")
+            logger.error("chroma_error", error=str(exc))
             return []
 
     async def generate_response(
@@ -454,6 +452,13 @@ class SupportRAGService:
             or best_conf < settings.RAG_MIN_CONFIDENCE
             or not _has_meaningful_overlap(retrieval_base, chunks)
         ):
+            logger.info(
+                "rag_knowledge_gap",
+                query=user_message[:120],
+                chunks_found=len(chunks),
+                best_confidence=round(best_conf, 3),
+                min_confidence=settings.RAG_MIN_CONFIDENCE,
+            )
             return {
                 "text": NO_KNOWLEDGE,
                 "sources": [],
@@ -498,11 +503,21 @@ class SupportRAGService:
                 "llm_error": result.get("error") or result.get("finish_reason"),
             }
 
+        sources_set = list({c["source"] for c in chunks})
+        logger.info(
+            "rag_response",
+            sources=sources_set,
+            chunks_used=len(selected_chunks),
+            best_confidence=round(best_conf, 3),
+            tokens_used=result.get("tokens_used"),
+            latency_ms=round(result.get("response_time_ms") or 0),
+        )
+
         return {
             "text": _strip_leaked_context_markers(result["text"]),
             "tokens_used": result.get("tokens_used"),
             "response_time_ms": result.get("response_time_ms"),
-            "sources": list({c["source"] for c in chunks}),
+            "sources": sources_set,
             "avg_confidence": avg_conf,
             "best_confidence": best_conf,
             "knowledge_gap": False,

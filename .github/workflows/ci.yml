@@ -7,8 +7,74 @@ on:
     branches: [main]
 
 jobs:
+
+  # ── 1. Linting y type checking ────────────────────────────────────────────
+  backend-lint:
+    name: Backend Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install lint tools
+        run: pip install ruff==0.4.7 mypy==1.10.0
+
+      - name: Ruff lint
+        run: |
+          cd backend
+          ruff check app/ --select=E,F,W,I --ignore=E501 --output-format=github
+
+      - name: Ruff format check
+        run: |
+          cd backend
+          ruff format app/ --check
+
+      - name: Mypy type check (modo permisivo inicial)
+        run: |
+          cd backend
+          mypy app/ \
+            --ignore-missing-imports \
+            --no-strict-optional \
+            --exclude 'app/db/migrations' \
+            || true  # No bloquea el build en esta fase inicial — solo reporta
+
+  # ── 2. Seguridad de dependencias ─────────────────────────────────────────
+  backend-security:
+    name: Backend Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install security tools
+        run: pip install bandit==1.7.9 pip-audit==2.7.3
+
+      - name: Bandit SAST scan
+        run: |
+          cd backend
+          bandit -r app/ \
+            -x app/db/migrations \
+            -ll \
+            --format github \
+            || true  # Reporta pero no bloquea en fase inicial
+
+      - name: pip-audit dependency scan
+        run: |
+          cd backend
+          pip-audit -r requirements.txt --format=markdown \
+            || true  # Reporta pero no bloquea en fase inicial
+
+  # ── 3. Tests y cobertura ─────────────────────────────────────────────────
   backend-tests:
-    name: Backend Tests
+    name: Backend Tests & Coverage
     runs-on: ubuntu-latest
 
     services:
@@ -27,11 +93,9 @@ jobs:
           --health-retries 5
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
@@ -40,28 +104,44 @@ jobs:
         run: |
           cd backend
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio httpx
+          pip install pytest pytest-asyncio httpx pytest-cov
 
-      - name: Run backend tests
+      - name: Run tests with coverage
         env:
           DATABASE_URL: postgresql://botiq_user:botiq_pass@localhost:5432/botiq_test_db
-          SECRET_KEY: test-secret-key-for-ci
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          SECRET_KEY: test-secret-key-for-ci-32chars!!
+          GCP_PROJECT_ID: ""
           ENVIRONMENT: test
+          RATE_LIMIT_ENABLED: "false"
         run: |
           cd backend
-          pytest tests/ -v --tb=short
+          pytest tests/ \
+            -v \
+            --tb=short \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=30
+          # Umbral inicial: 30%. Subir gradualmente a medida que se agreguen tests.
+          # Meta a 3 meses: 60%. Meta a 6 meses: 75%.
 
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: backend/coverage.xml
+          retention-days: 14
+
+  # ── 4. Frontend ───────────────────────────────────────────────────────────
   frontend-tests:
     name: Frontend Tests
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
@@ -82,15 +162,15 @@ jobs:
           cd frontend
           npm run build
 
+  # ── 5. Docker build (solo en main) ───────────────────────────────────────
   docker-build:
     name: Docker Build Check
     runs-on: ubuntu-latest
-    needs: [backend-tests, frontend-tests]
+    needs: [backend-lint, backend-tests, frontend-tests]
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Build backend Docker image
         run: docker build -t botiq-backend:latest ./backend

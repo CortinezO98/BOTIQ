@@ -1,7 +1,11 @@
 """Cliente base Vertex AI con manejo graceful si no hay credenciales."""
 import os
 import vertexai
+
 from app.core.config import settings
+from app.core.logging_config import get_logger
+
+logger = get_logger(__name__, service="vertex_ai")
 
 _initialized = False
 
@@ -11,7 +15,7 @@ def init_vertex_ai() -> bool:
     if _initialized:
         return True
     if not settings.GCP_PROJECT_ID:
-        print("⚠️  GCP_PROJECT_ID no configurado — modo demo activo")
+        logger.warning("vertex_not_configured", reason="GCP_PROJECT_ID vacío — modo demo activo")
         return False
     try:
         creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS
@@ -24,10 +28,10 @@ def init_vertex_ai() -> bool:
         else:
             vertexai.init(project=settings.GCP_PROJECT_ID, location=settings.GCP_LOCATION)
         _initialized = True
-        print(f"✅ Vertex AI inicializado — Proyecto: {settings.GCP_PROJECT_ID}")
+        logger.info("vertex_initialized", project=settings.GCP_PROJECT_ID, location=settings.GCP_LOCATION)
         return True
-    except Exception as e:
-        print(f"⚠️  Vertex AI error: {e}")
+    except Exception as exc:
+        logger.error("vertex_init_failed", error=str(exc), project=settings.GCP_PROJECT_ID)
         return False
 
 
@@ -39,5 +43,3 @@ try:
     init_vertex_ai()
 except Exception:
     pass
-
-

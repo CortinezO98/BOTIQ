@@ -1,5 +1,3 @@
-import axios from "axios";
-
 const API_URL = import.meta.env.VITE_API_URL || window.__BOTIQ_API_URL__ || "http://localhost:8002/api/v1";
 
 const api = axios.create({
@@ -61,6 +59,14 @@ export const chatAPI = {
 
   adminConversationLogsExport: (params = {}) =>
     api.get("/chat/admin/conversation-logs/export", { params, responseType: "blob", timeout: 60000 }),
+
+  // Feedback 👍/👎 por mensaje del bot
+  submitFeedback: (messageId, rating, comment = null) =>
+    api.post(`/chat/message/${messageId}/feedback`, { rating, comment }),
+
+  // Encuesta de satisfacción al cerrar conversación
+  submitSatisfaction: (sessionId, score, comment = null) =>
+    api.post(`/chat/session/${sessionId}/satisfaction`, { score, comment }),
 };
 
 export const faqAPI = {
@@ -141,5 +147,3 @@ export function downloadCsvFromRows(rows, filename) {
 }
 
 export default api;
-
-

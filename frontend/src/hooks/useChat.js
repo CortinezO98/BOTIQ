@@ -1,4 +1,3 @@
-import { useCallback, useRef, useState } from "react";
 import { chatAPI } from "../services/api";
 
 function normalizeError(error, fallback = "Error procesando solicitud.") {
@@ -110,6 +109,29 @@ export function useChat() {
     sid.current = null;
   }, []);
 
+  const submitFeedback = useCallback(async (messageId, rating, comment = null) => {
+    try {
+      await chatAPI.submitFeedback(messageId, rating, comment);
+      // Actualizar el estado local del mensaje con el rating
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId ? { ...m, meta: { ...m.meta, userRating: rating } } : m
+        )
+      );
+    } catch (error) {
+      console.error("Error enviando feedback:", error);
+    }
+  }, []);
+
+  const submitSatisfaction = useCallback(async (score, comment = null) => {
+    if (!sid.current) return;
+    try {
+      await chatAPI.submitSatisfaction(sid.current, score, comment);
+    } catch (error) {
+      console.error("Error enviando satisfacción:", error);
+    }
+  }, []);
+
   const loadConversationMessages = useCallback(async (conversationId) => {
     setLoading(true);
     try {
@@ -140,7 +162,7 @@ export function useChat() {
     sendMessage,
     clearChat,
     loadConversationMessages,
+    submitFeedback,
+    submitSatisfaction,
   };
 }
-
-

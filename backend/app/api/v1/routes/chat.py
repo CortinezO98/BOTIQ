@@ -41,6 +41,7 @@ from app.services.web_search_service import web_search_service
 from app.services.web_knowledge_cache_service import web_knowledge_cache_service
 from app.services.routing_policy_service import routing_policy_service
 from app.services.general_assistant_service import general_assistant_service
+from app.services.incident_service import incident_service
 
 router = APIRouter()
 
@@ -982,7 +983,22 @@ async def send_message(
         has_ip=bool(detected_ip),
         matrix_found=bool(matrix_result.get("found")),
         case_type=decision.case_type,
+        # Extrae el intent_family del turno anterior para que mensajes cortos de
+        # seguimiento ("GUIAME", "continúa", "no funcionó") hereden la clasificación
+        # del turno previo en vez de caer a internal_or_mixed, que desactiva el
+        # respaldo de IA general y hace que el bot pida URL/aplicativo innecesariamente.
+        previous_intent_family=(conversation.metadata_ or {}).get("routing", {}).get("intent_family"),
     )
+
+    # Guarda el routing_decision actual en metadata para que el próximo turno
+    # pueda heredarlo via previous_intent_family.
+    conversation.metadata_ = {
+        **(conversation.metadata_ or {}),
+        "routing": {
+            "intent_family": routing_decision.get("intent_family"),
+            "general_hits": routing_decision.get("general_hits", []),
+        },
+    }
 
     # Si el flujo necesita datos mínimos, primero pregunta y NO quema tokens de RAG/Gemini innecesariamente.
     # EXCEPCIÓN: si el enrutador clasificó la consulta como ofimática general (Excel, Word,
@@ -1232,6 +1248,45 @@ async def send_message(
         is_general_tech_route=is_general_tech_route,
         history=rag_history,
     )
+
+    # ── Registro automático de respuestas de IA general para revisión admin ──
+    # Mismo patrón que WEB_KNOWLEDGE_AUTO_REGISTER pero con source_type="general_ai"
+    if bot_result.get("general_ai_used") and settings.GENERAL_AI_FALLBACK_ENABLED:
+        generated_text = (bot_result.get("text") or "").strip()
+        if generated_text:
+            item = await web_knowledge_cache_service.register_pending(
+                db,
+                question=message,
+                answer=generated_text,
+                sources=[],
+                created_by=current_user.id,
+                confidence=0.55,
+            )
+            # Marcar como fuente de IA general (no búsqueda web)
+            item.source_type = "general_ai"
+            item.web_search_used = False
+            bot_result["ai_knowledge_cache_id"] = str(item.id)
+
+    # ── Detección de incidentes masivos ────────────────────────────────────
+    # Si hay un aplicativo o URL identificado y el caso es de tipo "down" o error,
+    # verificar si superamos el umbral de usuarios afectados en la ventana de tiempo.
+    incident_case_types = {"app_down", "server_status", "access_issue"}
+    if (
+        decision.case_type in incident_case_types
+        and (detected_url or detected_ip or matrix_result.get("found"))
+    ):
+        app_name = None
+        if matrix_result.get("found"):
+            app_data = matrix_result.get("application") or {}
+            app_name = app_data.get("app_name") or app_data.get("portal_name")
+
+        await incident_service.check_and_create_alert(
+            db,
+            app_name=app_name,
+            app_or_url=detected_url or detected_ip,
+            conversation_id=str(conversation.id),
+            category=decision.case_type,
+        )
 
     if app_status:
         bot_result["application_status"] = app_status

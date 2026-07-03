@@ -31,4 +31,8 @@ pytest==8.2.0
 pytest-asyncio==0.23.7
 openpyxl==3.1.5
 pypdf==4.3.1
+# Rate limiting en endpoints críticos (login, register, chat)
+slowapi==0.1.9
+limits==3.13.0
 
+pytest-cov==7.1.0 
