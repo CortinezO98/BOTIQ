@@ -74,28 +74,11 @@ async def _classify_support_module(message: str) -> ModuleType:
     return intent.module
 
 
-# Cuántos mensajes previos (usuario + asistente) se reenvían como historial a
-# Gemini en las respuestas de RAG. Más alto = mejor continuidad conversacional
-# pero más tokens consumidos en cada turno. 6 mensajes ≈ 3 intercambios.
 RAG_HISTORY_MAX_MESSAGES = 6
-# Tope de caracteres por mensaje de historial, para que una respuesta larga
-# anterior no infle el prompt de todos los turnos siguientes.
 RAG_HISTORY_MAX_CHARS_PER_MESSAGE = 600
 
 
 async def _load_rag_history(db: AsyncSession, conversation_id: uuid.UUID) -> List[Dict]:
-    """
-    Carga los últimos turnos YA PERSISTIDOS de la conversación, para dar
-    continuidad a Gemini en las respuestas de RAG (p. ej. "dame el paso a
-    paso" referido a la respuesta anterior).
-
-    Antes, support_rag_service.generate_response() se llamaba sin `history`,
-    así que cada mensaje se procesaba de forma aislada y el modelo no tenía
-    forma de saber a qué se refería un mensaje corto de seguimiento.
-
-    Se llama ANTES de agregar el mensaje actual a la sesión de BD, para no
-    duplicarlo (el mensaje actual ya se envía aparte como prompt).
-    """
     rows = (
         await db.execute(
             select(Message)
@@ -109,7 +92,7 @@ async def _load_rag_history(db: AsyncSession, conversation_id: uuid.UUID) -> Lis
     ).scalars().all()
 
     history: List[Dict] = []
-    for row in reversed(rows):  # orden cronológico ascendente
+    for row in reversed(rows):
         role = "model" if row.role == MessageRole.ASSISTANT else "user"
         content = (row.content or "")[:RAG_HISTORY_MAX_CHARS_PER_MESSAGE]
         if content:
@@ -173,10 +156,6 @@ def _compose_unified_answer(
     matrix_result: Optional[Dict],
     image_analysis: Optional[str],
 ) -> Dict:
-    """
-    Une FAQ + RAG + estado interno + análisis de imagen.
-    Evita respuestas secas y registra brechas cuando no hay conocimiento.
-    """
     parts: List[str] = []
     sources: List[str] = []
     tokens_used = 0
@@ -261,10 +240,6 @@ async def _apply_approved_web_knowledge(
     profile: str,
     db: AsyncSession,
 ) -> Dict:
-    """
-    Antes de consultar internet, revisa si ya existe conocimiento web aprobado.
-    Si existe, responde desde base interna y NO consume Google Custom Search.
-    """
     if not bot_result.get("knowledge_gap"):
         return bot_result
 
@@ -299,14 +274,6 @@ async def _apply_web_fallback(
     db: AsyncSession,
     current_user: User,
 ) -> Dict:
-    """
-    Consulta internet solo como fallback cuando FAQ/RAG/matriz/estado no dan respuesta suficiente.
-
-    Si internet ayuda:
-    - responde al usuario,
-    - mantiene trazabilidad de brecha interna,
-    - registra automáticamente una sugerencia en web_knowledge_cache con estado pending.
-    """
     if not bot_result.get("knowledge_gap") or not settings.WEB_SEARCH_ENABLED:
         if settings.DEBUG:
             print(
@@ -403,20 +370,6 @@ async def _apply_general_ai_fallback(
     is_general_tech_route: bool,
     history: Optional[List[Dict]],
 ) -> Dict:
-    """
-    Último eslabón de la cadena: si NADA más respondió (ni FAQ, ni RAG interno,
-    ni conocimiento web aprobado, ni búsqueda web — porque está deshabilitada,
-    sin resultados, cupo agotado o la consulta no calificó para salir a
-    internet), y la pregunta es de ofimática/tecnología GENERAL (no interna),
-    Gemini responde con su propio conocimiento, dejando explícito que es
-    orientación general y no un procedimiento validado por IQ.
-
-    Restricción deliberada: NUNCA se activa para preguntas internas/mixtas
-    (is_general_tech_route=False). Para esas, inventar una respuesta sin
-    ninguna fuente real sería más riesgoso que admitir que no se encontró
-    información, porque Gemini no tiene cómo conocer aplicativos, portales
-    o políticas internas de IQ.
-    """
     if not bot_result.get("knowledge_gap"):
         return bot_result
     if not is_general_tech_route:
@@ -452,6 +405,31 @@ async def _apply_general_ai_fallback(
     bot_result["knowledge_gap"] = False
     bot_result["general_ai_used"] = True
     return bot_result
+
+
+def _determine_answer_source(bot_result: Dict, matrix_result: Optional[Dict]) -> Optional[str]:
+    """
+    Traduce los flags internos de bot_result (antes solo persistidos en
+    metadata_ de Message, nunca expuestos en la respuesta HTTP en vivo) a un
+    único string que el frontend puede mostrar como chip: "de dónde salió
+    esta respuesta". Orden de prioridad: cuanto más "curada"/confiable la
+    fuente, antes se reporta.
+    """
+    if not bot_result:
+        return None
+    if bot_result.get("faq_used"):
+        return "faq"
+    if bot_result.get("web_cache_used"):
+        return "web_approved"
+    if bot_result.get("general_ai_used"):
+        return "general_ai"
+    if bot_result.get("web_used"):
+        return "web_pending"
+    if bot_result.get("matrix_used") or (matrix_result and matrix_result.get("found")):
+        return "matrix"
+    if bot_result.get("sources") and not bot_result.get("knowledge_gap"):
+        return "rag"
+    return None
 
 
 async def _register_knowledge_gap(
@@ -632,7 +610,6 @@ async def get_conversation_messages(
 
 
 def _normalize_date_range(date_from: Optional[datetime], date_to: Optional[datetime]):
-    """Normaliza fechas de filtros: asegura tz UTC y hace date_to inclusivo."""
     if date_from and date_from.tzinfo is None:
         date_from = date_from.replace(tzinfo=timezone.utc)
     if date_to:
@@ -929,7 +906,6 @@ async def send_message(
             raise HTTPException(status_code=403, detail="No tienes permiso para operar como Ingeniero de Soporte.")
         module = await _classify_support_module(message)
     else:
-        # Empleado usa flujo guiado + base de conocimiento + FAQs + estado interno.
         module = ModuleType.EMPLOYEE
 
     if not can_access_module(current_user.role, MODULE_PERM.get(module, "employee_chat")):
@@ -941,8 +917,6 @@ async def send_message(
     decision = conversation_flow_service.analyze(conversation, message, image_analysis=image_analysis)
     conversation.metadata_ = conversation_flow_service.merge_case_metadata(conversation.metadata_, decision)
 
-    # Se carga ANTES de agregar el mensaje actual a la sesión, para que el
-    # historial no incluya (duplicado) el propio mensaje que se está procesando.
     rag_history = await _load_rag_history(db, conversation.id)
 
     detected_url = chat_guard_service.extract_url(message) or decision.slots.get("url")
@@ -953,7 +927,6 @@ async def send_message(
     if detected_ip:
         conversation.detected_ip = detected_ip
 
-    # Matriz interna: relaciona URL/IP/aplicativo con servidor, ambiente y criticidad.
     matrix_result = await application_matrix_service.lookup(
         db,
         url=detected_url,
@@ -968,7 +941,6 @@ async def send_message(
         if not conversation.detected_ip and app.get("ip_address"):
             conversation.detected_ip = app["ip_address"]
 
-        # Completa slots con datos de la matriz.
         slots = dict(decision.slots or {})
         slots.setdefault("app_or_url", app.get("app_name") or app.get("portal_name") or app.get("url_pattern"))
         slots.setdefault("url", app.get("url_pattern"))
@@ -983,15 +955,9 @@ async def send_message(
         has_ip=bool(detected_ip),
         matrix_found=bool(matrix_result.get("found")),
         case_type=decision.case_type,
-        # Extrae el intent_family del turno anterior para que mensajes cortos de
-        # seguimiento ("GUIAME", "continúa", "no funcionó") hereden la clasificación
-        # del turno previo en vez de caer a internal_or_mixed, que desactiva el
-        # respaldo de IA general y hace que el bot pida URL/aplicativo innecesariamente.
         previous_intent_family=(conversation.metadata_ or {}).get("routing", {}).get("intent_family"),
     )
 
-    # Guarda el routing_decision actual en metadata para que el próximo turno
-    # pueda heredarlo via previous_intent_family.
     conversation.metadata_ = {
         **(conversation.metadata_ or {}),
         "routing": {
@@ -1000,10 +966,6 @@ async def send_message(
         },
     }
 
-    # Si el flujo necesita datos mínimos, primero pregunta y NO quema tokens de RAG/Gemini innecesariamente.
-    # EXCEPCIÓN: si el enrutador clasificó la consulta como ofimática general (Excel, Word,
-    # Outlook, etc. sin señales internas), NO pedimos aplicativo/URL ni cortamos el turno;
-    # dejamos que el flujo continúe hasta FAQ → web-cache → búsqueda web controlada.
     is_general_tech_route = routing_decision.get("intent_family") in {"general_tech", "general_tech_support"}
 
     if decision.direct_response and decision.intent not in {"ticket_confirmation"} and not is_general_tech_route:
@@ -1043,7 +1005,6 @@ async def send_message(
 
     explicit_ticket_request = chat_guard_service.asks_for_ticket(message) or decision.intent == "ticket_confirmation"
 
-    # Creación estricta de ticket Aranda.
     if explicit_ticket_request:
         can_ticket, reason = conversation_flow_service.can_escalate_to_aranda(
             conversation,
@@ -1154,8 +1115,6 @@ async def send_message(
     if internal_context_parts:
         enriched_message = f"{message}\n\nInformación interna consultada por BOTIQ:\n" + "\n\n".join(internal_context_parts)
 
-    # Empleado: primero FAQ/cache; RAG solo si el enrutador lo autoriza.
-    # Ingeniero: RAG técnico cuando aplica, pero se omite para ofimática general sin señales internas.
     if module == ModuleType.EMPLOYEE:
         faq = await employee_bot_service.get_faq_answer(message, db)
 
@@ -1249,8 +1208,6 @@ async def send_message(
         history=rag_history,
     )
 
-    # ── Registro automático de respuestas de IA general para revisión admin ──
-    # Mismo patrón que WEB_KNOWLEDGE_AUTO_REGISTER pero con source_type="general_ai"
     if bot_result.get("general_ai_used") and settings.GENERAL_AI_FALLBACK_ENABLED:
         generated_text = (bot_result.get("text") or "").strip()
         if generated_text:
@@ -1262,14 +1219,10 @@ async def send_message(
                 created_by=current_user.id,
                 confidence=0.55,
             )
-            # Marcar como fuente de IA general (no búsqueda web)
             item.source_type = "general_ai"
             item.web_search_used = False
             bot_result["ai_knowledge_cache_id"] = str(item.id)
 
-    # ── Detección de incidentes masivos ────────────────────────────────────
-    # Si hay un aplicativo o URL identificado y el caso es de tipo "down" o error,
-    # verificar si superamos el umbral de usuarios afectados en la ventana de tiempo.
     incident_case_types = {"app_down", "server_status", "access_issue"}
     if (
         decision.case_type in incident_case_types
@@ -1291,7 +1244,6 @@ async def send_message(
     if app_status:
         bot_result["application_status"] = app_status
 
-    # Cuenta intentos de solución cuando BOTIQ usó una fuente real.
     used_resolution_source = bool(
         app_status
         or faq
@@ -1311,7 +1263,6 @@ async def send_message(
             avg_confidence=(rag_result or {}).get("avg_confidence", 0),
         )
 
-    # Ofrece ticket solo si ya hay señales fuertes y datos mínimos. No crea ticket automático.
     if conversation_flow_service.should_offer_ticket(conversation, decision, app_status):
         conversation.ticket_eligible = True
         offer = conversation_flow_service.build_ticket_offer_message(decision)
@@ -1329,6 +1280,8 @@ async def send_message(
             "Por control de consumo de IA, esta conversación será finalizada."
         )
         chat_guard_service.finish_conversation(conversation, "question_limit_reached", "ended")
+
+    answer_source = _determine_answer_source(bot_result, matrix_result)
 
     db.add(
         Message(
@@ -1349,6 +1302,8 @@ async def send_message(
                 "web_knowledge_cache_id": bot_result.get("web_knowledge_cache_id"),
                 "web_knowledge_status": bot_result.get("web_knowledge_status"),
                 "internal_knowledge_gap": bot_result.get("internal_knowledge_gap", False),
+                "general_ai_used": bot_result.get("general_ai_used", False),
+                "answer_source": answer_source,
                 "module": module.value,
                 "application_status": app_status,
                 "matrix_result": matrix_result,
@@ -1396,6 +1351,7 @@ async def send_message(
         ended_reason=conversation.ended_reason,
         question_count=conversation.question_count or 0,
         max_questions=settings.MAX_QUESTIONS_PER_SESSION,
+        answer_source=answer_source,
     )
 
 

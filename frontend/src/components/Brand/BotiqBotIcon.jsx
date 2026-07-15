@@ -5,9 +5,9 @@ export default function BotiqBotIcon({
   light = false,
   strokeWidth = 2,
 }) {
-  const main = light ? "#ffffff" : color;
+  const main = light ? "#fff" : color;
   const soft = light ? "rgba(255,255,255,0.25)" : `${color}18`;
-  const eye = light ? "#ffffff" : accent;
+  const eye = light ? "#fff" : accent;
 
   return (
     <svg
@@ -64,5 +64,3 @@ export default function BotiqBotIcon({
     </svg>
   );
 }
-
-

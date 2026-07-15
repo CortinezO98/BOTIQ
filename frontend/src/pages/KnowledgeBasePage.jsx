@@ -8,7 +8,7 @@ const STATUS_INFO = {
   indexed: { label: "Indexado", color: "#059669", icon: "✅" },
   pending: { label: "Pendiente", color: "#d97706", icon: "⏳" },
   failed: { label: "Error", color: "#dc2626", icon: "❌" },
-  skipped: { label: "Sin cambios", color: "#6b6b8a", icon: "⏭️" },
+  skipped: { label: "Sin cambios", color: "var(--botiq-muted)", icon: "⏭️" },
 };
 
 const DOC_ICON = {
@@ -114,7 +114,7 @@ export default function KnowledgeBasePage() {
             <h1 style={{ color: C, fontSize: "clamp(22px, 3vw, 28px)", margin: 0, letterSpacing: "-0.5px" }}>
               📚 Base de conocimiento
             </h1>
-            <p style={{ color: "#6b6b8a", marginTop: 6, fontSize: 13, lineHeight: 1.6, maxWidth: 640 }}>
+            <p style={{ color: "var(--botiq-muted)", marginTop: 6, fontSize: 13, lineHeight: 1.6, maxWidth: 640 }}>
               Estado del RAG, Google Drive y documentos indexados en ChromaDB. La
               sincronización es incremental: solo procesa documentos nuevos o modificados.
             </p>
@@ -135,7 +135,7 @@ export default function KnowledgeBasePage() {
         {error && <div style={alertStyle}>⚠️ {error}</div>}
 
         {loading ? (
-          <div className="botiq-card" style={{ padding: 18, color: "#6b6b8a" }}>Cargando estado...</div>
+          <div className="botiq-card" style={{ padding: 18, color: "var(--botiq-muted)" }}>Cargando estado...</div>
         ) : (
           <>
             {/* KPIs */}
@@ -158,15 +158,15 @@ export default function KnowledgeBasePage() {
 
             {/* Tabla de documentos */}
             <section className="botiq-card" style={{ padding: 0, marginTop: 16 }}>
-              <div style={{ padding: "14px 18px", borderBottom: "1px solid #e2e1f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+              <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--botiq-border)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                 <h2 style={{ color: C, fontSize: 15, margin: 0 }}>Documentos indexados</h2>
-                <span style={{ fontSize: 12, color: "#6b6b8a" }}>
+                <span style={{ fontSize: 12, color: "var(--botiq-muted)" }}>
                   {summary?.total ?? 0} documento(s) · {summary?.total_chunks ?? 0} chunks
                 </span>
               </div>
 
               {!docsData?.documents?.length ? (
-                <div style={{ padding: 28, textAlign: "center", color: "#6b6b8a" }}>
+                <div style={{ padding: 28, textAlign: "center", color: "var(--botiq-muted)" }}>
                   <div style={{ fontSize: 34, marginBottom: 8 }}>🗂️</div>
                   Aún no hay documentos registrados. Pulsa <strong>Sincronizar</strong> para indexar la carpeta de Drive.
                 </div>
@@ -191,17 +191,17 @@ export default function KnowledgeBasePage() {
                           return (
                             <tr key={doc.file_id}>
                               <td style={{ maxWidth: 320 }}>
-                                <span style={{ fontWeight: 650, color: "#1a1a2e", overflowWrap: "anywhere" }}>
+                                <span style={{ fontWeight: 650, color: "var(--botiq-text)", overflowWrap: "anywhere" }}>
                                   {DOC_ICON[doc.doc_type] || "📄"} {doc.file_name}
                                 </span>
                                 {doc.status === "failed" && doc.error_message && (
                                   <div style={{ color: "#dc2626", fontSize: 11, marginTop: 3 }}>{doc.error_message}</div>
                                 )}
                               </td>
-                              <td style={{ color: "#6b6b8a", fontSize: 12 }}>{doc.doc_type || "—"}</td>
+                              <td style={{ color: "var(--botiq-muted)", fontSize: 12 }}>{doc.doc_type || "—"}</td>
                               <td style={{ textAlign: "center", fontWeight: 800, color: C }}>{doc.chunk_count}</td>
                               <td><Badge color={st.color}>{st.icon} {st.label}</Badge></td>
-                              <td style={{ color: "#6b6b8a", fontSize: 12, whiteSpace: "nowrap" }}>
+                              <td style={{ color: "var(--botiq-muted)", fontSize: 12, whiteSpace: "nowrap" }}>
                                 {doc.last_indexed_at ? new Date(doc.last_indexed_at).toLocaleString() : "—"}
                               </td>
                               <td>
@@ -225,13 +225,13 @@ export default function KnowledgeBasePage() {
                     {docsData.documents.map((doc) => {
                       const st = STATUS_INFO[doc.status] || STATUS_INFO.pending;
                       return (
-                        <div key={doc.file_id} style={{ border: "1px solid #e2e1f0", borderRadius: 12, padding: 12 }}>
-                          <div style={{ fontWeight: 700, color: "#1a1a2e", fontSize: 13, overflowWrap: "anywhere", marginBottom: 6 }}>
+                        <div key={doc.file_id} style={{ border: "1px solid var(--botiq-border)", borderRadius: 12, padding: 12 }}>
+                          <div style={{ fontWeight: 700, color: "var(--botiq-text)", fontSize: 13, overflowWrap: "anywhere", marginBottom: 6 }}>
                             {DOC_ICON[doc.doc_type] || "📄"} {doc.file_name}
                           </div>
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
                             <Badge color={st.color}>{st.icon} {st.label}</Badge>
-                            <span style={{ fontSize: 11, color: "#6b6b8a" }}>{doc.chunk_count} chunks</span>
+                            <span style={{ fontSize: 11, color: "var(--botiq-muted)" }}>{doc.chunk_count} chunks</span>
                           </div>
                           {doc.status === "failed" && doc.error_message && (
                             <div style={{ color: "#dc2626", fontSize: 11, marginBottom: 8 }}>{doc.error_message}</div>
@@ -272,7 +272,7 @@ export default function KnowledgeBasePage() {
 function Kpi({ label, value, icon, color = C }) {
   return (
     <article className="botiq-card" style={{ padding: "14px 16px" }}>
-      <div style={{ color: "#6b6b8a", fontSize: 11, fontWeight: 750, display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ color: "var(--botiq-muted)", fontSize: 11, fontWeight: 750, display: "flex", alignItems: "center", gap: 6 }}>
         <span>{icon}</span> {label}
       </div>
       <div style={{ color, fontSize: 24, fontWeight: 900, marginTop: 4, overflowWrap: "anywhere" }}>{value}</div>
@@ -283,7 +283,7 @@ function Kpi({ label, value, icon, color = C }) {
 function Row({ label, value, danger = false }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 16, borderBottom: "1px solid #f0effe", paddingBottom: 8 }}>
-      <span style={{ color: "#6b6b8a" }}>{label}</span>
+      <span style={{ color: "var(--botiq-muted)" }}>{label}</span>
       <span style={{ color: danger ? "#991b1b" : "#374151", fontWeight: 600, textAlign: "right", overflowWrap: "anywhere" }}>{value}</span>
     </div>
   );
@@ -298,10 +298,8 @@ function Badge({ children, color }) {
 }
 
 const primaryBtn = { background: C, color: "#fff", border: "none", borderRadius: 12, padding: "11px 16px", cursor: "pointer", fontWeight: 850, minHeight: 44 };
-const secondaryBtn = { background: "#fff", color: C, border: `1px solid ${C}30`, borderRadius: 12, padding: "11px 16px", cursor: "pointer", fontWeight: 800, minHeight: 44 };
+const secondaryBtn = { background: "var(--botiq-card-bg)", color: C, border: `1px solid ${C}30`, borderRadius: 12, padding: "11px 16px", cursor: "pointer", fontWeight: 800, minHeight: 44 };
 const miniBtn = { border: `1px solid ${C}25`, borderRadius: 8, background: `${C}08`, color: C, padding: "6px 12px", cursor: "pointer", fontWeight: 800, fontSize: 12 };
 const alertStyle = { background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 14, padding: "12px 14px", marginBottom: 16, fontSize: 13 };
 const noticeOk = { background: "#eef2ff", color: "#3730a3", border: "1px solid #c7d2fe", borderRadius: 14, padding: "12px 14px", marginBottom: 16, fontSize: 13 };
 const noticeStyle = { marginTop: 16, background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e", padding: 14, borderRadius: 12, lineHeight: 1.6, fontSize: 13 };
-
-

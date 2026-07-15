@@ -11,7 +11,7 @@ _DEV_SECRET_KEY = "dev-secret-change-in-production-32chars!!"
 
 class Settings(BaseSettings):
     APP_NAME: str = "BOTIQ"
-    APP_VERSION: str = "1.9.0"
+    APP_VERSION: str = "1.13.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_COOKIE_NAME: str = "botiq_access_token"
     REFRESH_TOKEN_COOKIE_NAME: str = "botiq_refresh_token"
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    # Ventana en la que un refresh token recién rotado todavía se acepta.
+    # Absorbe ráfagas de peticiones concurrentes (varias pestañas, varias
+    # llamadas paralelas del frontend) que llegan con la cookie vieja antes
+    # de que el navegador termine de aplicar la nueva. Sin esto, la primera
+    # petición en llegar rota el token con éxito y todas las demás quedan
+    # rechazadas en cascada, aunque la sesión sea legítima.
+    REFRESH_TOKEN_GRACE_SECONDS: int = 15
 
     # ── MFA (TOTP) ───────────────────────────────────────────────────────
     # Opt-in por ahora (no forzado): cada admin decide activarlo desde su

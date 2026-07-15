@@ -1,3 +1,4 @@
+================================================
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -14,11 +15,174 @@
   --botiq-text: #1a1a2e;
   --botiq-muted: #6b6b8a;
   --botiq-white: #ffffff;
+  --botiq-card-bg: #ffffff;
   --botiq-success: #059669;
   --botiq-warning: #d97706;
   --botiq-danger: #dc2626;
   --botiq-info: #0284c7;
   --botiq-shadow: 0 18px 46px rgba(39, 33, 99, 0.08);
+
+  /* ── Claymorfismo ──────────────────────────────────────────────────────
+   * "Soft 3D": una sombra externa clara (luz desde arriba-izquierda) +
+   * una sombra interna sutil, sobre una superficie clara con degradado
+   * apenas perceptible. Se usa como capa ADICIONAL sobre el sistema de
+   * diseño existente (--botiq-*), no lo reemplaza — así no hay que
+   * reescribir cada componente para adoptarlo.
+   *
+   * Variables ya preparadas para modo oscuro (--clay-bg-dark, etc.) aunque
+   * el modo oscuro en sí no está implementado todavía (prioridad baja del
+   * backlog de UX) — definirlas ahora evita reescribir todo después.
+   */
+  --clay-bg: linear-gradient(145deg, #ffffff, #f3f3fa);
+  --clay-bg-flat: #f7f7fc;
+  --clay-shadow-light: rgba(255, 255, 255, 0.85);
+  --clay-shadow-dark: rgba(39, 33, 99, 0.16);
+  --clay-shadow-raised:
+    -6px -6px 14px var(--clay-shadow-light),
+    6px 6px 16px var(--clay-shadow-dark);
+  --clay-shadow-inset:
+    inset -3px -3px 8px var(--clay-shadow-light),
+    inset 3px 3px 8px var(--clay-shadow-dark);
+  --clay-shadow-chip:
+    -2px -2px 5px var(--clay-shadow-light),
+    2px 2px 6px var(--clay-shadow-dark);
+  --clay-radius: 20px;
+  --clay-radius-sm: 12px;
+
+  /* Preparado para modo oscuro, sin activar todavía */
+  --clay-bg-dark: linear-gradient(145deg, #2a2560, #221d52);
+  --clay-shadow-light-dark: rgba(255, 255, 255, 0.05);
+  --clay-shadow-dark-dark: rgba(0, 0, 0, 0.45);
+}
+
+/* ── Modo oscuro ──────────────────────────────────────────────────────────
+ * Activado con [data-theme="dark"] en <html> (ver hooks/useTheme.jsx).
+ * Solo redefine variables ya existentes -- ningún componente necesita
+ * lógica propia de tema, siempre que use var(--botiq-*)/var(--clay-*) en
+ * vez de colores literales.
+ *
+ * Decisión de diseño: los colores de MARCA (--botiq-primary y variantes,
+ * badges de estado success/warning/danger/info) se mantienen iguales en
+ * ambos temas -- solo cambian superficie, borde y texto neutro. Es un
+ * recorte de alcance consciente: texto blanco fijo sobre botones con
+ * degradado de color (const C = "#272163" hardcodeado por archivo) queda
+ * igual en los dos temas porque esos botones no cambian de color.
+ */
+[data-theme="dark"] {
+  --botiq-surface: #16132f;
+  --botiq-card-bg: #1f1b47;
+  --botiq-border: #322d5c;
+  --botiq-text: #e8e7f5;
+  --botiq-muted: #a19dc9;
+  --botiq-shadow: 0 18px 46px rgba(0, 0, 0, 0.35);
+
+  --clay-bg: linear-gradient(145deg, #241f56, #1a1640);
+  --clay-bg-flat: #211d4d;
+  --clay-shadow-light: var(--clay-shadow-light-dark);
+  --clay-shadow-dark: var(--clay-shadow-dark-dark);
+}
+
+[data-theme="dark"] body {
+  background: var(--botiq-surface);
+  color: var(--botiq-text);
+}
+
+[data-theme="dark"] .botiq-modal,
+[data-theme="dark"] .botiq-log-card {
+  background: var(--botiq-card-bg);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: var(--botiq-border);
+}
+
+/* ── Skeleton loaders (claymorphism) ─────────────────────────────────────
+ * Superficie gris suave, sin bordes duros, con shimmer sutil. Usa
+ * --clay-bg-flat (ya theme-aware) como base, así se ve bien en ambos temas
+ * sin necesitar sus propias variables.
+ */
+.botiq-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--clay-bg-flat) 25%,
+    var(--botiq-border) 50%,
+    var(--clay-bg-flat) 75%
+  );
+  background-size: 200% 100%;
+  animation: botiq-skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes botiq-skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .botiq-skeleton {
+    animation: none;
+    background: var(--clay-bg-flat);
+  }
+}
+
+/* ── Utilidades de claymorfismo ─────────────────────────────────────────
+ * .botiq-clay-surface   → contenedor "hundido/elevado" genérico (cards, paneles)
+ * .botiq-clay-chip      → chip/badge pequeño con volumen (fuente de respuesta, estados)
+ * .botiq-clay-chip--warning/success/info/danger → variantes de color institucional
+ */
+.botiq-clay-surface {
+  background: var(--clay-bg);
+  border-radius: var(--clay-radius);
+  box-shadow: var(--clay-shadow-raised);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.botiq-clay-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--clay-bg-flat);
+  box-shadow: var(--clay-shadow-chip);
+  color: var(--botiq-primary);
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.botiq-clay-chip--warning { color: #92400e; background: #fff9ef; }
+.botiq-clay-chip--success { color: #065f46; background: #f0fdf7; }
+.botiq-clay-chip--info { color: #0369a1; background: #f0f9ff; }
+.botiq-clay-chip--danger { color: #991b1b; background: #fef7f7; }
+.botiq-clay-chip--purple { color: #6d28d9; background: #faf7ff; }
+
+/* Variante "hundida" (sombra interna) — para indicadores de estado/alerta
+ * que deben sentirse "presionados en" la superficie, no flotando sobre
+ * ella. Pedida específicamente para el badge de modo degradado. */
+.botiq-clay-chip--inset {
+  box-shadow: var(--clay-shadow-inset);
+}
+
+.botiq-clay-badge-pulse {
+  position: relative;
+}
+
+.botiq-clay-badge-pulse::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  background: inherit;
+  filter: blur(4px);
+  opacity: 0.5;
+  z-index: -1;
+  animation: botiq-clay-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes botiq-clay-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.65; }
 }
 
 html, body, #root {
@@ -75,7 +239,7 @@ a {
 }
 
 .botiq-card {
-  background: #fff;
+  background: var(--botiq-card-bg);
   border: 1px solid var(--botiq-border);
   border-radius: 18px;
   box-shadow: var(--botiq-shadow);
@@ -503,5 +667,3 @@ a {
     scroll-behavior: auto !important;
   }
 }
-
-

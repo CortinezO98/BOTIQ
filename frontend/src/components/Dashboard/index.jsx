@@ -14,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import { dashboardAPI, supportAPI } from "../../services/api";
+import { Skeleton, SkeletonCard, SkeletonKpiRow } from "../Skeleton";
 
 const C = "#272163";
 const COLORS = ["#272163", "#4f46e5", "#7c3aed", "#0284c7", "#059669", "#d97706", "#dc2626"];
@@ -157,9 +158,9 @@ export default function Dashboard() {
           {data.byDay.length > 0 ? (
             <ChartBox>
               <LineChart data={data.byDay}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e1f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#6b6b8a" }} tickFormatter={(value) => String(value).slice(5)} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#6b6b8a" }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--botiq-border)" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: "var(--botiq-muted)" }} tickFormatter={(value) => String(value).slice(5)} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "var(--botiq-muted)" }} />
                 <Tooltip contentStyle={tooltipStyle} />
                 <Line type="monotone" dataKey="count" stroke={C} strokeWidth={3} dot={{ r: 4, fill: C }} name="Conversaciones" />
               </LineChart>
@@ -195,9 +196,9 @@ export default function Dashboard() {
           {data.tokens.length > 0 ? (
             <ChartBox>
               <BarChart data={data.tokens}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e1f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#6b6b8a" }} tickFormatter={(value) => String(value).slice(5)} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#6b6b8a" }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--botiq-border)" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: "var(--botiq-muted)" }} tickFormatter={(value) => String(value).slice(5)} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "var(--botiq-muted)" }} />
                 <Tooltip contentStyle={tooltipStyle} />
                 <Bar dataKey="tokens" fill="#4f46e5" radius={[8, 8, 0, 0]} name="Tokens" />
               </BarChart>
@@ -213,7 +214,7 @@ export default function Dashboard() {
               <div style={{ color: escalation.rate_pct > 20 ? "#dc2626" : escalation.rate_pct > 10 ? "#d97706" : "#059669", fontSize: 44, fontWeight: 900, letterSpacing: "-1.6px" }}>
                 {escalation.rate_pct}%
               </div>
-              <p style={{ margin: 0, color: "#6b6b8a", fontSize: 12 }}>tasa de escalación</p>
+              <p style={{ margin: 0, color: "var(--botiq-muted)", fontSize: 12 }}>tasa de escalación</p>
             </div>
           </div>
         </Card>
@@ -278,8 +279,8 @@ function Legend({ color, label, value }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13 }}>
       <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, flexShrink: 0 }} />
-      <span style={{ flex: 1, color: "#6b6b8a" }}>{label}</span>
-      <strong style={{ color: "#1a1a2e" }}>{value}</strong>
+      <span style={{ flex: 1, color: "var(--botiq-muted)" }}>{label}</span>
+      <strong style={{ color: "var(--botiq-text)" }}>{value}</strong>
     </div>
   );
 }
@@ -287,8 +288,8 @@ function Legend({ color, label, value }) {
 function StatRow({ label, value }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, paddingBottom: 10, borderBottom: "1px solid #f0effe", fontSize: 13 }}>
-      <span style={{ color: "#6b6b8a" }}>{label}</span>
-      <strong style={{ color: "#1a1a2e" }}>{value}</strong>
+      <span style={{ color: "var(--botiq-muted)" }}>{label}</span>
+      <strong style={{ color: "var(--botiq-text)" }}>{value}</strong>
     </div>
   );
 }
@@ -311,13 +312,20 @@ function Empty({ text = "Sin datos aún" }) {
 
 function Loader() {
   return (
-    <div style={{ minHeight: "calc(100vh - 64px)", display: "grid", placeItems: "center", background: "#f5f5fa" }}>
-      <div style={{ textAlign: "center" }}>
-        <div style={loaderStyle} />
-        <p style={{ color: "#6b6b8a", fontSize: 13 }}>Cargando métricas...</p>
-        <style>{`@keyframes botiqSpin{to{transform:rotate(360deg)}}`}</style>
+    <main className="botiq-container" style={{ display: "grid", gap: 22 }} aria-busy="true" aria-label="Cargando dashboard">
+      <div>
+        <Skeleton height={12} width={140} style={{ marginBottom: 10 }} />
+        <Skeleton height={26} width={260} style={{ marginBottom: 8 }} />
+        <Skeleton height={13} width={220} />
       </div>
-    </div>
+
+      <SkeletonKpiRow count={5} />
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+        <SkeletonCard lines={4} />
+        <SkeletonCard lines={4} />
+      </div>
+    </main>
   );
 }
 
@@ -353,7 +361,7 @@ const eyebrow = {
 };
 
 const titleStyle = { color: C, fontSize: "clamp(24px, 3vw, 34px)", margin: 0, letterSpacing: "-1px", fontWeight: 900 };
-const subtitleStyle = { color: "#6b6b8a", fontSize: 14, margin: "6px 0 0", lineHeight: 1.5 };
+const subtitleStyle = { color: "var(--botiq-muted)", fontSize: 14, margin: "6px 0 0", lineHeight: 1.5 };
 
 const toolbarStyle = {
   display: "flex",
@@ -377,7 +385,7 @@ const primaryButton = {
 const secondaryButton = {
   border: "1px solid #d8d6ea",
   borderRadius: 12,
-  background: "#fff",
+  background: "var(--botiq-card-bg)",
   color: C,
   padding: "11px 16px",
   cursor: "pointer",
@@ -387,7 +395,7 @@ const secondaryButton = {
 const selectStyle = {
   border: "1px solid #d8d6ea",
   borderRadius: 12,
-  background: "#fff",
+  background: "var(--botiq-card-bg)",
   color: C,
   padding: "11px 12px",
   fontWeight: 750,
@@ -402,8 +410,8 @@ const kpiGridStyle = {
 };
 
 const kpiCard = {
-  background: "#fff",
-  border: "1px solid #e2e1f0",
+  background: "var(--botiq-card-bg)",
+  border: "1px solid var(--botiq-border)",
   borderRadius: 18,
   padding: 18,
   boxShadow: "0 10px 28px rgba(39,33,99,0.07)",
@@ -414,7 +422,7 @@ const kpiCard = {
 
 const kpiIcon = { width: 38, height: 38, borderRadius: 12, display: "grid", placeItems: "center", fontSize: 18 };
 const kpiValue = { color: "#101026", fontSize: 28, lineHeight: 1, letterSpacing: "-1px" };
-const kpiLabel = { color: "#6b6b8a", fontSize: 12, fontWeight: 650 };
+const kpiLabel = { color: "var(--botiq-muted)", fontSize: 12, fontWeight: 650 };
 
 const twoColStyle = {
   display: "grid",
@@ -430,13 +438,12 @@ const twoColBottomStyle = {
 
 const cardStyle = { padding: 20, minWidth: 0, overflow: "hidden" };
 const cardTitle = { color: C, fontSize: 15, margin: "0 0 18px", fontWeight: 900 };
-const tooltipStyle = { borderRadius: 12, border: "1px solid #e2e1f0", boxShadow: "0 10px 24px rgba(39,33,99,0.12)", fontSize: 12 };
+const tooltipStyle = { borderRadius: 12, border: "1px solid var(--botiq-border)", boxShadow: "0 10px 24px rgba(39,33,99,0.12)", fontSize: 12 };
 
 const listRowStyle = { display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid #f0effe" };
 const listIndexStyle = { width: 28, height: 28, borderRadius: "50%", display: "grid", placeItems: "center", fontSize: 12, fontWeight: 900, flexShrink: 0 };
-const listTitleStyle = { color: "#1a1a2e", fontSize: 13, fontWeight: 750, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
-const listMetaStyle = { color: "#6b6b8a", fontSize: 11, marginTop: 3 };
-const loaderStyle = { width: 42, height: 42, border: "3px solid #e2e1f0", borderTop: `3px solid ${C}`, borderRadius: "50%", animation: "botiqSpin 0.8s linear infinite", margin: "0 auto 14px" };
+const listTitleStyle = { color: "var(--botiq-text)", fontSize: 13, fontWeight: 750, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+const listMetaStyle = { color: "var(--botiq-muted)", fontSize: 11, marginTop: 3 };
 
 // Responsive rules injected here because this component usa estilos inline.
 
@@ -453,4 +460,6 @@ if (typeof document !== "undefined" && !document.getElementById("botiq-dashboard
   `;
   document.head.appendChild(style);
 }
+
+
 

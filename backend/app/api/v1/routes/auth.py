@@ -185,7 +185,15 @@ async def refresh(
         raise HTTPException(status_code=401, detail="Sin sesión activa para renovar")
 
     token_hash = hash_refresh_token(raw_token)
-    result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
+    # FOR UPDATE: si dos peticiones llegan casi al mismo tiempo con la misma
+    # cookie (dos pestañas, o dos llamadas paralelas del frontend), la
+    # segunda espera a que la primera termine su transacción en vez de leer
+    # la fila todavía no rotada -- sin este bloqueo, ambas podrían leer
+    # "válido" antes de que cualquiera escriba, y el período de gracia de
+    # rotated_at nunca llegaría a aplicarse de verdad.
+    result = await db.execute(
+        select(RefreshToken).where(RefreshToken.token_hash == token_hash).with_for_update()
+    )
     record = result.scalar_one_or_none()
 
     if not record or not record.is_valid():
@@ -197,7 +205,12 @@ async def refresh(
         _clear_auth_cookies(response)
         raise HTTPException(status_code=401, detail="Usuario no encontrado o inactivo")
 
-    record.revoked_at = datetime.now(timezone.utc)
+    # Marca "rotado" (no "revocado"): dentro de REFRESH_TOKEN_GRACE_SECONDS
+    # todavía se acepta reusar este mismo token viejo (ver is_valid() en el
+    # modelo). Si ya estaba rotado de una ráfaga anterior muy reciente, no
+    # reiniciamos el reloj de gracia -- se cuenta desde la PRIMERA rotación.
+    if record.rotated_at is None:
+        record.rotated_at = datetime.now(timezone.utc)
     new_refresh_token = await _issue_refresh_token(db, user.id, request.headers.get("user-agent"))
     access_token = create_access_token({"sub": str(user.id), "role": user.role.value})
     await db.commit()

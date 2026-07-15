@@ -146,7 +146,7 @@ export default function LoginPage() {
             border: "1px solid rgba(255,255,255,0.35)",
             borderRadius: 24,
             padding: "38px 34px",
-            boxShadow: "0 28px 80px rgba(0,0,0,0.28)",
+            boxShadow: "0 28px 80px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -6px 16px rgba(39,33,99,0.03)",
             backdropFilter: "blur(12px)",
           }}
         >
@@ -161,7 +161,7 @@ export default function LoginPage() {
                   Verificación en dos pasos
                 </h2>
 
-                <p style={{ marginTop: 7, color: "#6b6b8a", fontSize: 13 }}>
+                <p style={{ marginTop: 7, color: "var(--botiq-muted)", fontSize: 13 }}>
                   Ingresa el código de 6 dígitos de tu app de autenticación.
                 </p>
               </div>
@@ -232,7 +232,7 @@ export default function LoginPage() {
                     width: "100%",
                     border: "none",
                     background: "transparent",
-                    color: "#6b6b8a",
+                    color: "var(--botiq-muted)",
                     fontSize: 13,
                     marginTop: 14,
                     cursor: "pointer",
@@ -253,7 +253,7 @@ export default function LoginPage() {
                   Iniciar sesión
                 </h2>
 
-                <p style={{ marginTop: 7, color: "#6b6b8a", fontSize: 13 }}>
+                <p style={{ marginTop: 7, color: "var(--botiq-muted)", fontSize: 13 }}>
                   Accede con tu cuenta corporativa.
                 </p>
               </div>
@@ -299,7 +299,7 @@ export default function LoginPage() {
                         transform: "translateY(-50%)",
                         background: "transparent",
                         border: "none",
-                        color: "#6b6b8a",
+                        color: "var(--botiq-muted)",
                         cursor: "pointer",
                         fontSize: 16,
                       }}
@@ -381,12 +381,12 @@ const labelStyle = { display: "block", color: "#374151", fontSize: 12, fontWeigh
 
 const inputStyle = {
   width: "100%",
-  border: "1.5px solid #e2e1f0",
+  border: "1.5px solid var(--botiq-border)",
   borderRadius: 11,
   padding: "11px 14px",
   background: "#fafafa",
   outline: "none",
-  color: "#1a1a2e",
+  color: "var(--botiq-text)",
   fontSize: 14,
   transition: "border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease",
   boxSizing: "border-box",
@@ -395,11 +395,11 @@ const inputStyle = {
 function focusInput(e) {
   e.target.style.borderColor = C;
   e.target.style.boxShadow = `0 0 0 4px ${C}14`;
-  e.target.style.background = "#fff";
+  e.target.style.background = "var(--botiq-card-bg)";
 }
 
 function blurInput(e) {
-  e.target.style.borderColor = "#e2e1f0";
+  e.target.style.borderColor = "var(--botiq-border)";
   e.target.style.boxShadow = "none";
   e.target.style.background = "#fafafa";
 }

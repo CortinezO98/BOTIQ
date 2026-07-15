@@ -8,7 +8,7 @@ const C = "#272163";
 
 const STATUS_LABELS = {
   active: { label: "Activa", color: "#059669" },
-  ended: { label: "Finalizada", color: "#6b6b8a" },
+  ended: { label: "Finalizada", color: "var(--botiq-muted)" },
   blocked: { label: "Bloqueada", color: "#dc2626" },
 };
 
@@ -93,7 +93,7 @@ export default function ConversationLogsPage() {
             <h1 style={{ color: C, fontSize: "clamp(22px, 3vw, 28px)", margin: 0, letterSpacing: "-0.5px" }}>
               🧾 Logs de conversaciones
             </h1>
-            <p style={{ color: "#6b6b8a", marginTop: 6, fontSize: 13, lineHeight: 1.6, maxWidth: 640 }}>
+            <p style={{ color: "var(--botiq-muted)", marginTop: 6, fontSize: 13, lineHeight: 1.6, maxWidth: 640 }}>
               Trazabilidad completa por usuario, perfil, sesión, URL/IP, elegibilidad de ticket y escalamiento a Aranda.
               Haz clic en una conversación para ver el detalle completo.
             </p>
@@ -107,7 +107,7 @@ export default function ConversationLogsPage() {
         <section className="botiq-kpi-row animate__animated animate__fadeInUp">
           <Metric label="Total" value={stats.total} icon="💬" />
           <Metric label="Activas" value={stats.active} color="#059669" icon="🟢" />
-          <Metric label="Finalizadas" value={stats.ended} color="#6b6b8a" icon="🏁" />
+          <Metric label="Finalizadas" value={stats.ended} color="var(--botiq-muted)" icon="🏁" />
           <Metric label="Bloqueadas" value={stats.blocked} color="#dc2626" icon="🚫" />
           <Metric label="Escaladas a Aranda" value={stats.escalated} color="#d97706" icon="🎫" />
         </section>
@@ -163,9 +163,9 @@ export default function ConversationLogsPage() {
         </section>
 
         {loading ? (
-          <div className="botiq-card" style={{ padding: 18, color: "#6b6b8a" }}>Cargando logs...</div>
+          <div className="botiq-card" style={{ padding: 18, color: "var(--botiq-muted)" }}>Cargando logs...</div>
         ) : logs.length === 0 ? (
-          <div className="botiq-card" style={{ padding: 28, color: "#6b6b8a", textAlign: "center" }}>
+          <div className="botiq-card" style={{ padding: 28, color: "var(--botiq-muted)", textAlign: "center" }}>
             <div style={{ fontSize: 34, marginBottom: 8 }}>🗂️</div>
             No hay conversaciones que coincidan con los filtros.
           </div>
@@ -220,12 +220,12 @@ function LogRow({ item, onOpen }) {
 
   return (
     <tr onClick={onOpen} className="botiq-logs-row" title="Ver conversación completa">
-      <td style={{ whiteSpace: "nowrap", color: "#6b6b8a", fontSize: 12 }}>
+      <td style={{ whiteSpace: "nowrap", color: "var(--botiq-muted)", fontSize: 12 }}>
         {item.created_at ? new Date(item.created_at).toLocaleString() : "N/A"}
       </td>
       <td>
         <div style={{ fontWeight: 750, color: C, fontSize: 13 }}>{item.user_full_name || "Usuario"}</div>
-        <div style={{ color: "#6b6b8a", fontSize: 11 }}>{item.user_email}</div>
+        <div style={{ color: "var(--botiq-muted)", fontSize: 11 }}>{item.user_email}</div>
       </td>
       <td><Badge color={pf.color}>{pf.icon} {pf.label}</Badge></td>
       <td><Badge color={st.color}>{st.label}</Badge></td>
@@ -274,7 +274,7 @@ function LogCard({ item, onOpen }) {
       <h3 style={{ color: C, fontSize: 14, marginBottom: 4, overflowWrap: "anywhere" }}>
         {item.user_full_name || "Usuario"}
       </h3>
-      <p style={{ color: "#6b6b8a", fontSize: 11, marginBottom: 8 }}>{item.user_email}</p>
+      <p style={{ color: "var(--botiq-muted)", fontSize: 11, marginBottom: 8 }}>{item.user_email}</p>
 
       <p style={{ color: "#374151", fontSize: 12, lineHeight: 1.55, overflowWrap: "anywhere" }}>
         {item.last_message || "Sin mensaje de usuario registrado."}
@@ -287,7 +287,7 @@ function LogCard({ item, onOpen }) {
         </p>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, color: "#6b6b8a", fontSize: 11 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, color: "var(--botiq-muted)", fontSize: 11 }}>
         <span>💬 {item.question_count ?? 0} preguntas</span>
         <span>{item.created_at ? new Date(item.created_at).toLocaleString() : ""}</span>
       </div>
@@ -343,7 +343,7 @@ function ConversationModal({ item, onClose }) {
 
         <div className="botiq-modal-body">
           {/* Resumen */}
-          <section style={{ background: "#f5f5fa", border: "1px solid #e2e1f0", borderRadius: 14, padding: 14, marginBottom: 16 }}>
+          <section style={{ background: "var(--botiq-surface)", border: "1px solid var(--botiq-border)", borderRadius: 14, padding: 14, marginBottom: 16 }}>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
               <Badge color={st.color}>{st.label}</Badge>
               <Badge color={pf.color}>{pf.icon} {pf.label}</Badge>
@@ -357,7 +357,7 @@ function ConversationModal({ item, onClose }) {
               {item.aranda_ticket_id && <Badge color="#059669">🎫 {item.aranda_ticket_id}{item.aranda_ticket_status ? ` · ${item.aranda_ticket_status}` : ""}</Badge>}
             </div>
 
-            <p style={{ fontSize: 13, color: "#1a1a2e", lineHeight: 1.7, margin: 0 }}>
+            <p style={{ fontSize: 13, color: "var(--botiq-text)", lineHeight: 1.7, margin: 0 }}>
               <strong style={{ color: C }}>Resumen:</strong> {summary}
             </p>
 
@@ -377,11 +377,11 @@ function ConversationModal({ item, onClose }) {
           </h4>
 
           {loading ? (
-            <p style={{ color: "#6b6b8a", fontSize: 13 }}>Cargando mensajes...</p>
+            <p style={{ color: "var(--botiq-muted)", fontSize: 13 }}>Cargando mensajes...</p>
           ) : error ? (
             <div style={alertStyle}>⚠️ {error}</div>
           ) : messages.length === 0 ? (
-            <p style={{ color: "#6b6b8a", fontSize: 13 }}>Esta conversación no tiene mensajes registrados.</p>
+            <p style={{ color: "var(--botiq-muted)", fontSize: 13 }}>Esta conversación no tiene mensajes registrados.</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {messages.map((msg) => <TranscriptBubble key={msg.id} msg={msg} />)}
@@ -399,16 +399,16 @@ function TranscriptBubble({ msg }) {
 
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexDirection: isUser ? "row-reverse" : "row" }}>
-      <div style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, background: isUser ? "#e2e1f0" : `${C}12` }}>
+      <div style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, background: isUser ? "var(--botiq-border)" : `${C}12` }}>
         {isUser ? "👤" : "🤖"}
       </div>
 
       <div style={{ maxWidth: "82%", minWidth: 0 }}>
         <div
           style={{
-            background: isUser ? `linear-gradient(135deg, ${C}, ${C}dd)` : isSystem ? "#eef2ff" : "#f5f5fa",
-            color: isUser ? "#fff" : "#1a1a2e",
-            border: isUser ? "none" : "1px solid #e2e1f0",
+            background: isUser ? `linear-gradient(135deg, ${C}, ${C}dd)` : isSystem ? "#eef2ff" : "var(--botiq-surface)",
+            color: isUser ? "#fff" : "var(--botiq-text)",
+            border: isUser ? "none" : "1px solid var(--botiq-border)",
             borderRadius: isUser ? "14px 4px 14px 14px" : "4px 14px 14px 14px",
             padding: "10px 14px",
             fontSize: 13,
@@ -461,7 +461,7 @@ function buildSummary(item, messages) {
 function Metric({ label, value, color = C, icon }) {
   return (
     <article className="botiq-card" style={{ padding: "14px 16px" }}>
-      <div style={{ color: "#6b6b8a", fontSize: 11, fontWeight: 750, display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ color: "var(--botiq-muted)", fontSize: 11, fontWeight: 750, display: "flex", alignItems: "center", gap: 6 }}>
         <span>{icon}</span> {label}
       </div>
       <div style={{ color, fontSize: 25, fontWeight: 900, marginTop: 4 }}>{value}</div>
@@ -471,8 +471,8 @@ function Metric({ label, value, color = C, icon }) {
 
 function SummaryStat({ label, value }) {
   return (
-    <div style={{ background: "#fff", border: "1px solid #e2e1f0", borderRadius: 10, padding: "8px 10px", minWidth: 0 }}>
-      <div style={{ color: "#6b6b8a", fontSize: 10, fontWeight: 750, textTransform: "uppercase", letterSpacing: ".3px" }}>{label}</div>
+    <div style={{ background: "var(--botiq-card-bg)", border: "1px solid var(--botiq-border)", borderRadius: 10, padding: "8px 10px", minWidth: 0 }}>
+      <div style={{ color: "var(--botiq-muted)", fontSize: 10, fontWeight: 750, textTransform: "uppercase", letterSpacing: ".3px" }}>{label}</div>
       <div style={{ color: C, fontSize: 12, fontWeight: 800, marginTop: 2, overflowWrap: "anywhere" }}>{value}</div>
     </div>
   );
@@ -517,7 +517,7 @@ const primaryBtn = {
 const exportBtn = {
   border: `1px solid ${C}30`,
   borderRadius: 12,
-  background: "#fff",
+  background: "var(--botiq-card-bg)",
   color: C,
   padding: "11px 18px",
   cursor: "pointer",
@@ -557,5 +557,3 @@ const alertStyle = {
   marginBottom: 16,
   fontSize: 13,
 };
-
-

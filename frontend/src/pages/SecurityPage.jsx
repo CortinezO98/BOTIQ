@@ -80,7 +80,7 @@ export default function SecurityPage() {
         <main className="botiq-page-main">
             <header style={{ marginBottom: 24 }}>
             <h1 style={{ color: C, fontSize: 24, margin: 0 }}>Seguridad</h1>
-            <p style={{ color: "#6b6b8a", marginTop: 6, fontSize: 13 }}>
+            <p style={{ color: "var(--botiq-muted)", marginTop: 6, fontSize: 13 }}>
                 Verificación en dos pasos (MFA) para tu cuenta de administrador.
             </p>
             </header>
@@ -92,7 +92,7 @@ export default function SecurityPage() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
                 <div>
                 <h2 style={sectionTitle}>Verificación en dos pasos</h2>
-                <p style={{ color: "#6b6b8a", fontSize: 13, margin: 0, maxWidth: 520 }}>
+                <p style={{ color: "var(--botiq-muted)", fontSize: 13, margin: 0, maxWidth: 520 }}>
                     Con MFA activo, además de tu contraseña vas a necesitar un código de 6 dígitos
                     de una app como Google Authenticator o Authy para iniciar sesión.
                 </p>
@@ -110,8 +110,8 @@ export default function SecurityPage() {
                 <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "auto 1fr", gap: 24, alignItems: "start" }}>
                 <div
                     style={{
-                    background: "#fff",
-                    border: "1px solid #e2e1f0",
+                    background: "var(--botiq-card-bg)",
+                    border: "1px solid var(--botiq-border)",
                     borderRadius: 12,
                     padding: 12,
                     display: "flex",
@@ -171,7 +171,7 @@ export default function SecurityPage() {
 
             {mfaEnabled && showDisableForm && (
                 <form onSubmit={disableMfa} style={{ marginTop: 18, display: "grid", gap: 12, maxWidth: 360 }}>
-                <p style={{ color: "#6b6b8a", fontSize: 12, margin: 0 }}>
+                <p style={{ color: "var(--botiq-muted)", fontSize: 12, margin: 0 }}>
                     Por seguridad, necesitamos tu contraseña y un código vigente de tu app de autenticación.
                 </p>
                 <label style={labelStyle}>
@@ -240,8 +240,8 @@ function StatusBadge({ enabled }) {
 }
 
 const cardStyle = {
-    background: "#fff",
-    border: "1px solid #e2e1f0",
+    background: "var(--botiq-card-bg)",
+    border: "1px solid var(--botiq-border)",
     borderRadius: 14,
     padding: 22,
     marginBottom: 22,
@@ -260,12 +260,12 @@ const labelStyle = {
 };
 
 const inputStyle = {
-    border: "1px solid #e2e1f0",
+    border: "1px solid var(--botiq-border)",
     borderRadius: 8,
     padding: "9px 10px",
     fontSize: 13,
     outline: "none",
-    background: "#fff",
+    background: "var(--botiq-card-bg)",
 };
 
 const primaryBtn = {
@@ -279,9 +279,9 @@ const primaryBtn = {
 };
 
 const secondaryBtn = {
-    background: "#f5f5fa",
+    background: "var(--botiq-surface)",
     color: C,
-    border: "1px solid #e2e1f0",
+    border: "1px solid var(--botiq-border)",
     borderRadius: 8,
     padding: "10px 16px",
     cursor: "pointer",
@@ -319,8 +319,8 @@ const successAlertStyle = {
 };
 
 const codeStyle = {
-    background: "#f5f5fa",
-    border: "1px solid #e2e1f0",
+    background: "var(--botiq-surface)",
+    border: "1px solid var(--botiq-border)",
     borderRadius: 6,
     padding: "2px 6px",
     fontFamily: "monospace",

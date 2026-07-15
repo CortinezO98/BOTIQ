@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
+import { useTheme } from "../../hooks/useTheme";
 import BotiqLogo from "../Brand/BotiqLogo";
 
 const C = "#272163";
@@ -13,6 +14,7 @@ const ROLE_LABELS = {
 
 export default function Navbar({ currentPage = "chat" }) {
   const { user, logout, isAdmin } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const nav = useNavigate();
   const roleInfo = ROLE_LABELS[user?.role] || ROLE_LABELS.employee;
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -97,7 +99,7 @@ export default function Navbar({ currentPage = "chat" }) {
 
       <div className="botiq-nav-desktop-links" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         {links}
-        <UserMenu roleInfo={roleInfo} user={user} logout={logout} />
+        <UserMenu roleInfo={roleInfo} user={user} logout={logout} theme={theme} toggleTheme={toggleTheme} />
       </div>
 
       {mobileOpen && (
@@ -118,14 +120,14 @@ export default function Navbar({ currentPage = "chat" }) {
           }}
         >
           {links}
-          <UserMenu roleInfo={roleInfo} user={user} logout={logout} mobile />
+          <UserMenu roleInfo={roleInfo} user={user} logout={logout} theme={theme} toggleTheme={toggleTheme} mobile />
         </div>
       )}
     </nav>
   );
 }
 
-function UserMenu({ roleInfo, user, logout, mobile = false }) {
+function UserMenu({ roleInfo, user, logout, theme, toggleTheme, mobile = false }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: mobile ? "space-between" : "flex-start" }}>
       <span
@@ -145,6 +147,26 @@ function UserMenu({ roleInfo, user, logout, mobile = false }) {
       <span style={{ color: "rgba(255,255,255,0.74)", fontSize: 13 }}>
         {user?.full_name?.split(" ")[0]}
       </span>
+
+      <button
+        onClick={toggleTheme}
+        title={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+        style={{
+          background: "rgba(255,255,255,0.09)",
+          border: "1px solid rgba(255,255,255,0.16)",
+          color: "rgba(255,255,255,0.78)",
+          width: 32,
+          height: 32,
+          borderRadius: 9,
+          cursor: "pointer",
+          fontSize: 15,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {theme === "dark" ? "☀️" : "🌙"}
+      </button>
 
       <button
         onClick={logout}

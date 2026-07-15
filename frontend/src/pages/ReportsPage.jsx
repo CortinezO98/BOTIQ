@@ -109,14 +109,14 @@ export default function ReportsPage() {
             <h1 style={{ color: C, fontSize: "clamp(22px, 3vw, 28px)", margin: 0, letterSpacing: "-0.5px" }}>
               📈 Reportería
             </h1>
-            <p style={{ color: "#6b6b8a", marginTop: 6, fontSize: 13, lineHeight: 1.6, maxWidth: 640 }}>
+            <p style={{ color: "var(--botiq-muted)", marginTop: 6, fontSize: 13, lineHeight: 1.6, maxWidth: 640 }}>
               Indicadores operativos de BOTIQ: volumen de conversaciones, uso por módulo, consumo de tokens,
               escalamiento a Aranda y exportación de datos para análisis externo.
             </p>
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="botiq-form-control" style={{ minHeight: 44, borderRadius: 12, padding: "0 12px", border: "1px solid #e2e1f0", background: "#fff", fontWeight: 700, color: C }}>
+            <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="botiq-form-control" style={{ minHeight: 44, borderRadius: 12, padding: "0 12px", border: "1px solid var(--botiq-border)", background: "var(--botiq-card-bg)", fontWeight: 700, color: C }}>
               {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
             <button onClick={() => load(days)} style={secondaryBtn} disabled={loading}>
@@ -152,9 +152,9 @@ export default function ReportsPage() {
                       <stop offset="100%" stopColor={C} stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e1f0" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#6b6b8a" }} />
-                  <YAxis tick={{ fontSize: 10, fill: "#6b6b8a" }} allowDecimals={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--botiq-border)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--botiq-muted)" }} />
+                  <YAxis tick={{ fontSize: 10, fill: "var(--botiq-muted)" }} allowDecimals={false} />
                   <Tooltip contentStyle={tooltipStyle} />
                   <Area type="monotone" dataKey="count" name="Conversaciones" stroke={C} strokeWidth={2.5} fill="url(#convGrad)" />
                 </AreaChart>
@@ -198,9 +198,9 @@ export default function ReportsPage() {
             {tokens.length === 0 ? <Empty /> : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={tokens} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e1f0" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#6b6b8a" }} />
-                  <YAxis tick={{ fontSize: 10, fill: "#6b6b8a" }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--botiq-border)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--botiq-muted)" }} />
+                  <YAxis tick={{ fontSize: 10, fill: "var(--botiq-muted)" }} />
                   <Tooltip contentStyle={tooltipStyle} />
                   <Bar dataKey="tokens" name="Tokens" fill="#4f46e5" radius={[6, 6, 0, 0]} />
                 </BarChart>
@@ -216,11 +216,11 @@ export default function ReportsPage() {
             {topFaqs.length === 0 ? <Empty text="Aún no hay FAQs con consultas registradas." /> : (
               <div style={{ display: "grid", gap: 8 }}>
                 {topFaqs.map((faq, index) => (
-                  <div key={`${faq.question}-${index}`} style={{ display: "flex", gap: 10, alignItems: "center", background: "#f5f5fa", border: "1px solid #e2e1f0", borderRadius: 10, padding: "9px 12px" }}>
+                  <div key={`${faq.question}-${index}`} style={{ display: "flex", gap: 10, alignItems: "center", background: "var(--botiq-surface)", border: "1px solid var(--botiq-border)", borderRadius: 10, padding: "9px 12px" }}>
                     <span style={{ color: C, fontWeight: 900, fontSize: 13, width: 22, flexShrink: 0 }}>#{index + 1}</span>
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 12, color: "#1a1a2e", fontWeight: 650, overflowWrap: "anywhere" }}>{faq.question}</div>
-                      {faq.category && <div style={{ fontSize: 10, color: "#6b6b8a" }}>{faq.category}</div>}
+                      <div style={{ fontSize: 12, color: "var(--botiq-text)", fontWeight: 650, overflowWrap: "anywhere" }}>{faq.question}</div>
+                      {faq.category && <div style={{ fontSize: 10, color: "var(--botiq-muted)" }}>{faq.category}</div>}
                     </div>
                     <span style={{ color: "#4f46e5", fontWeight: 850, fontSize: 12, flexShrink: 0 }}>{faq.hits} 👁️</span>
                   </div>
@@ -233,7 +233,7 @@ export default function ReportsPage() {
         {/* Exportaciones */}
         <section className="botiq-card animate__animated animate__fadeInUp" style={{ padding: 18 }}>
           <h3 style={{ color: C, fontSize: 14, margin: "0 0 6px" }}>⬇️ Exportar reportes</h3>
-          <p style={{ color: "#6b6b8a", fontSize: 12, margin: "0 0 14px", lineHeight: 1.6 }}>
+          <p style={{ color: "var(--botiq-muted)", fontSize: 12, margin: "0 0 14px", lineHeight: 1.6 }}>
             Descarga datos en CSV compatibles con Excel para el período seleccionado ({days} días).
             Las exportaciones de logs quedan registradas en auditoría.
           </p>
@@ -262,11 +262,11 @@ export default function ReportsPage() {
 function Kpi({ label, value, icon, color = C, sub }) {
   return (
     <article className="botiq-card" style={{ padding: "14px 16px" }}>
-      <div style={{ color: "#6b6b8a", fontSize: 11, fontWeight: 750, display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ color: "var(--botiq-muted)", fontSize: 11, fontWeight: 750, display: "flex", alignItems: "center", gap: 6 }}>
         <span>{icon}</span> {label}
       </div>
       <div style={{ color, fontSize: 24, fontWeight: 900, marginTop: 4, overflowWrap: "anywhere" }}>{value}</div>
-      {sub && <div style={{ color: "#6b6b8a", fontSize: 10, marginTop: 2 }}>{sub}</div>}
+      {sub && <div style={{ color: "var(--botiq-muted)", fontSize: 10, marginTop: 2 }}>{sub}</div>}
     </article>
   );
 }
@@ -305,8 +305,8 @@ function formatNumber(n) {
 /* ---------- Estilos ---------- */
 
 const tooltipStyle = {
-  background: "#fff",
-  border: "1px solid #e2e1f0",
+  background: "var(--botiq-card-bg)",
+  border: "1px solid var(--botiq-border)",
   borderRadius: 10,
   fontSize: 12,
   boxShadow: "0 8px 24px rgba(39,33,99,0.12)",
@@ -326,7 +326,7 @@ const primaryBtn = {
 const secondaryBtn = {
   border: `1px solid ${C}30`,
   borderRadius: 12,
-  background: "#fff",
+  background: "var(--botiq-card-bg)",
   color: C,
   padding: "11px 16px",
   cursor: "pointer",
@@ -355,5 +355,3 @@ const alertStyle = {
   marginBottom: 16,
   fontSize: 13,
 };
-
-

@@ -46,6 +46,10 @@ vi.mock("../hooks/useAuth", () => ({
   useAuth: () => ({ user: { role: "admin" }, logout: vi.fn(), isAdmin: true }),
 }));
 
+vi.mock("../hooks/useTheme", () => ({
+  useTheme: () => ({ theme: "light", toggleTheme: vi.fn() }),
+}));
+
 import GovernancePage from "./GovernancePage";
 
 describe("GovernancePage", () => {

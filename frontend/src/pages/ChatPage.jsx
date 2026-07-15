@@ -9,7 +9,7 @@ export default function ChatPage() {
   const firstName = user?.full_name?.split(" ")[0] || "Usuario";
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f5f5fa" }}>
+    <div style={{ minHeight: "100vh", background: "var(--botiq-surface)" }}>
       <Navbar currentPage="chat" />
 
       <main
@@ -41,8 +41,8 @@ export default function ChatPage() {
         <section
           className="animate__animated animate__fadeInUp"
           style={{
-            background: "#fff",
-            border: "1px solid #e2e1f0",
+            background: "var(--botiq-card-bg)",
+            border: "1px solid var(--botiq-border)",
             boxShadow: "0 18px 60px rgba(39,33,99,0.1)",
             borderRadius: 24,
             padding: "clamp(26px, 4vw, 42px) clamp(20px, 4vw, 36px)",
@@ -70,7 +70,7 @@ export default function ChatPage() {
 
           <p
             style={{
-              color: "#6b6b8a",
+              color: "var(--botiq-muted)",
               fontSize: "clamp(13px, 2vw, 15px)",
               maxWidth: 460,
               margin: "0 auto",
@@ -115,7 +115,7 @@ export default function ChatPage() {
             </div>
           )}
 
-          <p style={{ color: "#6b6b8a", fontSize: 12, marginTop: 22 }}>
+          <p style={{ color: "var(--botiq-muted)", fontSize: 12, marginTop: 22 }}>
             Usa el botón flotante inferior derecho para iniciar una conversación.
           </p>
         </section>
@@ -128,8 +128,8 @@ function Chip({ children }) {
   return (
     <span
       style={{
-        background: "#f5f5fa",
-        border: "1px solid #e2e1f0",
+        background: "var(--botiq-surface)",
+        border: "1px solid var(--botiq-border)",
         color: C,
         padding: "7px 12px",
         borderRadius: 999,
@@ -141,7 +141,3 @@ function Chip({ children }) {
     </span>
   );
 }
-
-
-
-

@@ -16,6 +16,28 @@ import { authAPI } from "../services/api";
  */
 const AuthContext = createContext(null);
 
+/**
+ * Antes, cualquier error de login (credenciales incorrectas, cuenta
+ * desactivada, rate limit excedido) mostraba el mismo mensaje genérico
+ * "Error al iniciar sesión" o el `detail` crudo del backend. Esto
+ * diferencia los casos que la auditoría de UX pidió distinguir.
+ */
+function describeAuthError(err) {
+  const status = err.response?.status;
+  const backendDetail = err.response?.data?.detail;
+
+  if (status === 403) {
+    return "Tu cuenta está desactivada. Contacta a un administrador de BOTIQ.";
+  }
+  if (status === 429) {
+    return "Demasiados intentos de inicio de sesión. Espera un minuto e intenta de nuevo.";
+  }
+  if (status === 401) {
+    return backendDetail || "Email o contraseña incorrectos.";
+  }
+  return backendDetail || "Error al iniciar sesión. Intenta de nuevo.";
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -58,7 +80,7 @@ export function AuthProvider({ children }) {
       setUser(data.user);
       return { mfaRequired: false, user: data.user };
     } catch (err) {
-      const msg = err.response?.data?.detail || "Error al iniciar sesión";
+      const msg = describeAuthError(err);
       setError(msg);
       throw new Error(msg);
     } finally {
@@ -74,7 +96,9 @@ export function AuthProvider({ children }) {
       setUser(data.user);
       return data.user;
     } catch (err) {
-      const msg = err.response?.data?.detail || "Código incorrecto";
+      const msg = err.response?.status === 429
+        ? "Demasiados intentos. Espera un minuto e intenta de nuevo."
+        : err.response?.data?.detail || "Código incorrecto";
       setError(msg);
       throw new Error(msg);
     } finally {

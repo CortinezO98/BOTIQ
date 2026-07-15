@@ -17,6 +17,7 @@ vi.mock("../../hooks/useChat", () => ({
 
 vi.mock("../../services/api", () => ({
   supportAPI: { status: vi.fn().mockResolvedValue({ data: {} }) },
+  healthAPI: { check: vi.fn().mockResolvedValue({ data: { ai_available: true } }) },
 }));
 
 import ChatWidget from "./index";
@@ -27,5 +28,13 @@ describe("ChatWidget", () => {
     // llave de cierre duplicada "}}" en SatisfactionModal que rompía el
     // parseo del archivo completo.
     expect(() => render(<ChatWidget embedded />)).not.toThrow();
+  });
+
+  it("muestra el badge de modo degradado cuando el backend reporta ai_available=false", async () => {
+    const api = await import("../../services/api");
+    api.healthAPI.check.mockResolvedValueOnce({ data: { ai_available: false, ai_mode: "demo" } });
+
+    const { findByText } = render(<ChatWidget embedded />);
+    expect(await findByText(/Modo degradado/)).toBeInTheDocument();
   });
 });

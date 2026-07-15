@@ -174,7 +174,7 @@ export default function FaqsPage() {
       <main className="botiq-page-main">
         <header style={{ marginBottom: 24 }}>
           <h1 style={{ color: C, fontSize: 24, margin: 0 }}>Gestión de FAQs</h1>
-          <p style={{ color: "#6b6b8a", marginTop: 6, fontSize: 13 }}>
+          <p style={{ color: "var(--botiq-muted)", marginTop: 6, fontSize: 13 }}>
             Administra FAQs aprobadas y revisa conocimiento sugerido por búsquedas web de BOTIQ.
           </p>
         </header>
@@ -377,7 +377,7 @@ function TextArea({ label, value, onChange, required = false, rows = 5 }) {
 }
 
 const cardStyle = {
-  background: "#fff",
+  background: "var(--botiq-card-bg)",
   borderRadius: 18,
   padding: 20,
   boxShadow: "0 18px 40px rgba(39,33,99,.08)",
@@ -386,7 +386,7 @@ const cardStyle = {
 };
 
 const sectionTitle = { color: C, fontSize: 18, margin: 0 };
-const muted = { color: "#6b6b8a", fontSize: 13, margin: 0 };
+const muted = { color: "var(--botiq-muted)", fontSize: 13, margin: 0 };
 const alertStyle = { background: "#fff1f1", color: "#b42318", border: "1px solid #ffcaca", padding: 12, borderRadius: 12, marginBottom: 16 };
 const headerRow = { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 14 };
 const formGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 };
@@ -394,8 +394,8 @@ const inputStyle = { border: "1px solid #d8d7ea", borderRadius: 10, padding: "10
 const primaryBtn = { background: C, color: "#fff", border: 0, borderRadius: 10, padding: "10px 14px", fontWeight: 800, cursor: "pointer" };
 const secondaryBtn = { background: "#f4f3ff", color: C, border: "1px solid #d9d6ff", borderRadius: 10, padding: "10px 14px", fontWeight: 800, cursor: "pointer" };
 const dangerBtn = { background: "#fff1f1", color: "#b42318", border: "1px solid #ffcaca", borderRadius: 10, padding: "10px 14px", fontWeight: 800, cursor: "pointer" };
-const emptyStyle = { padding: 18, borderRadius: 12, background: "#f7f7fc", color: "#6b6b8a", fontSize: 13 };
-const faqCard = { border: "1px solid #eeedf8", borderRadius: 14, padding: 14, background: "#fff" };
+const emptyStyle = { padding: 18, borderRadius: 12, background: "#f7f7fc", color: "var(--botiq-muted)", fontSize: 13 };
+const faqCard = { border: "1px solid #eeedf8", borderRadius: 14, padding: 14, background: "var(--botiq-card-bg)" };
 const suggestionCard = { border: "1px solid #f1dfb8", borderRadius: 14, padding: 14, background: "#fffaf0" };
 const badgeRow = { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" };
 const chipStyle = { background: "#f4f3ff", color: C, fontWeight: 800, fontSize: 11, padding: "5px 8px", borderRadius: 999 };
@@ -408,5 +408,3 @@ const statusBadge = (status) => ({
   padding: "5px 8px",
   borderRadius: 999,
 });
-
-

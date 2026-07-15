@@ -2,6 +2,17 @@ import axios from "axios";
 
 const API_URL = import.meta.env.VITE_API_URL || window.__BOTIQ_API_URL__ || "http://localhost:8002/api/v1";
 
+// /health vive en la raíz del backend (fuera de /api/v1, ver main.py). Antes
+// ChatWidget hacía fetch("/health") con una URL relativa, que apunta al
+// origen del FRONTEND (localhost:5180 en dev, nginx sirviendo el SPA en
+// prod) — nunca llegaba al backend real, así que el chequeo de "modo
+// degradado" nunca funcionó de verdad, ni en dev ni en producción.
+const BACKEND_ROOT = API_URL.replace(/\/api\/v1\/?$/, "");
+
+export const healthAPI = {
+  check: () => axios.get(`${BACKEND_ROOT}/health`, { timeout: 5000 }),
+};
+
 const api = axios.create({
   baseURL: API_URL,
   timeout: 30000,

@@ -109,7 +109,7 @@ export default function UsersPage() {
       <main className="botiq-page-main">
         <header style={{ marginBottom: 24 }}>
           <h1 style={{ color: C, fontSize: 24, margin: 0 }}>Gestión de usuarios</h1>
-          <p style={{ color: "#6b6b8a", marginTop: 6, fontSize: 13 }}>
+          <p style={{ color: "var(--botiq-muted)", marginTop: 6, fontSize: 13 }}>
             Crea usuarios, cambia roles y administra accesos de BOTIQ.
           </p>
         </header>
@@ -173,10 +173,12 @@ export default function UsersPage() {
           </div>
 
           {loading ? (
-            <p style={{ color: "#6b6b8a" }}>Cargando usuarios...</p>
+            <p style={{ color: "var(--botiq-muted)" }}>Cargando usuarios...</p>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={tableStyle}>
+            <>
+              {/* Escritorio: tabla */}
+              <div className="botiq-desktop-only" style={{ overflowX: "auto" }}>
+                <table style={tableStyle}>
                 <thead>
                   <tr>
                     <Th>Nombre</Th>
@@ -267,8 +269,29 @@ export default function UsersPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
+                </table>
+              </div>
+
+              {/* Móvil: tarjetas claymorphism */}
+              <div className="botiq-mobile-only">
+                <div style={{ display: "grid", gap: 12 }}>
+                  {users.map((user) => (
+                    <UserCard
+                      key={user.id}
+                      user={user}
+                      editing={editing === user.id}
+                      editForm={editForm}
+                      setEditForm={setEditForm}
+                      onStartEdit={() => startEdit(user)}
+                      onCancelEdit={() => setEditing(null)}
+                      onSave={() => updateUser(user.id)}
+                      onChangeRole={(role) => changeRole(user.id, role)}
+                      onToggleStatus={() => toggleStatus(user)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
           )}
         </section>
       </main>
@@ -276,6 +299,74 @@ export default function UsersPage() {
   );
 }
 
+function UserCard({ user, editing, editForm, setEditForm, onStartEdit, onCancelEdit, onSave, onChangeRole, onToggleStatus }) {
+  return (
+    <article className="botiq-clay-surface" style={{ padding: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          {editing ? (
+            <input
+              value={editForm.full_name}
+              onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+              style={{ ...inputStyle, marginBottom: 4 }}
+            />
+          ) : (
+            <h3 style={{ color: C, fontSize: 14, margin: 0, overflowWrap: "anywhere" }}>{user.full_name}</h3>
+          )}
+          <p style={{ color: "var(--botiq-muted)", fontSize: 12, margin: "4px 0 0", overflowWrap: "anywhere" }}>{user.email}</p>
+        </div>
+        <span
+          className={`botiq-clay-chip botiq-clay-chip--${user.is_active ? "success" : "danger"}`}
+          style={{ flexShrink: 0 }}
+        >
+          {user.is_active ? "Activo" : "Inactivo"}
+        </span>
+      </div>
+
+      <label style={{ ...labelStyle, marginTop: 10 }}>
+        Rol
+        <select value={user.role} onChange={(e) => onChangeRole(e.target.value)} style={inputStyle}>
+          <option value="employee">Empleado</option>
+          <option value="support_engineer">Ing. Soporte</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </label>
+
+      <p style={{ color: "#9ca3af", fontSize: 11, marginTop: 10 }}>
+        Creado el {new Date(user.created_at).toLocaleDateString()}
+      </p>
+
+      {editing && (
+        <input
+          placeholder="Nueva contraseña opcional"
+          type="password"
+          value={editForm.password}
+          onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+          style={{ ...inputStyle, marginTop: 10 }}
+        />
+      )}
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+        {editing ? (
+          <>
+            <button onClick={onSave} style={{ ...smallPrimaryBtn, flex: 1 }}>Guardar</button>
+            <button onClick={onCancelEdit} style={{ ...smallSecondaryBtn, flex: 1 }}>Cancelar</button>
+          </>
+        ) : (
+          <>
+            <button onClick={onStartEdit} style={{ ...smallSecondaryBtn, flex: 1 }}>Editar</button>
+            <button
+              onClick={onToggleStatus}
+              style={{ ...smallSecondaryBtn, flex: 1, color: user.is_active ? "#991b1b" : "#166534" }}
+            >
+              {user.is_active ? "Desactivar" : "Activar"}
+            </button>
+          </>
+        )}
+      </div>
+    </article>
+  );
+}
 function Input({ label, value, onChange, type = "text", required = false }) {
   return (
     <label style={labelStyle}>
@@ -300,8 +391,8 @@ function Td({ children }) {
 }
 
 const cardStyle = {
-  background: "#fff",
-  border: "1px solid #e2e1f0",
+  background: "var(--botiq-card-bg)",
+  border: "1px solid var(--botiq-border)",
   borderRadius: 14,
   padding: 22,
   marginBottom: 22,
@@ -331,12 +422,12 @@ const labelStyle = {
 };
 
 const inputStyle = {
-  border: "1px solid #e2e1f0",
+  border: "1px solid var(--botiq-border)",
   borderRadius: 8,
   padding: "9px 10px",
   fontSize: 13,
   outline: "none",
-  background: "#fff",
+  background: "var(--botiq-card-bg)",
 };
 
 const primaryBtn = {
@@ -350,9 +441,9 @@ const primaryBtn = {
 };
 
 const secondaryBtn = {
-  background: "#f5f5fa",
+  background: "var(--botiq-surface)",
   color: C,
-  border: "1px solid #e2e1f0",
+  border: "1px solid var(--botiq-border)",
   borderRadius: 8,
   padding: "8px 12px",
   cursor: "pointer",
@@ -390,7 +481,7 @@ const tableStyle = {
 const thStyle = {
   textAlign: "left",
   color: C,
-  borderBottom: "1px solid #e2e1f0",
+  borderBottom: "1px solid var(--botiq-border)",
   padding: "10px 8px",
   whiteSpace: "nowrap",
 };

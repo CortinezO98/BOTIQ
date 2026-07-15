@@ -12,6 +12,7 @@ import ReportsPage from "./pages/ReportsPage";
 import SecurityPage from "./pages/SecurityPage";
 import UsersPage from "./pages/UsersPage";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
+import { ThemeProvider } from "./hooks/useTheme";
 
 const C = "#272163";
 
@@ -60,10 +61,12 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useChat } from "../../hooks/useChat";
-import { supportAPI } from "../../services/api";
+import { healthAPI, supportAPI } from "../../services/api";
 import BotiqAvatar from "../Brand/BotiqAvatar";
 import BotiqBotIcon from "../Brand/BotiqBotIcon";
 
@@ -11,6 +11,19 @@ const MODULE_INFO = {
   employee: { label: "Empleado", icon: "👤", color: "#059669" },
   support_rag: { label: "Base Conocimiento", icon: "📚", color: "#7c3aed" },
   server_validation: { label: "Servidores", icon: "🖥️", color: "#0284c7" },
+};
+
+// Fuente real de cada respuesta (audit UX: "Chip de color distinto por
+// fuente"). Viene de ChatMessageResponse.answer_source (respuesta en vivo)
+// o de Message.metadata_.answer_source (historial cargado) — ver
+// _determine_answer_source() en chat.py.
+const ANSWER_SOURCE_INFO = {
+  faq: { label: "FAQ", icon: "❓", variant: "success" },
+  rag: { label: "Base de conocimiento", icon: "📚", variant: "info" },
+  matrix: { label: "Matriz interna", icon: "🗂️", variant: "info" },
+  web_approved: { label: "Web aprobado", icon: "✅", variant: "success" },
+  web_pending: { label: "Web (pendiente aprobación)", icon: "🌐", variant: "warning" },
+  general_ai: { label: "IA general", icon: "🤖", variant: "purple" },
 };
 
 const QUICK_EMPLOYEE = [];
@@ -51,10 +64,13 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
   useEffect(() => {
     if (open) {
       supportAPI.status().then((r) => setKbStatus(r.data)).catch(() => {});
-      // Verificar disponibilidad de Vertex AI
-      fetch("/health")
-        .then((r) => r.json())
-        .then((data) => setAiAvailable(data.ai_available !== false))
+      // Verificar disponibilidad de Vertex AI. Antes esto era
+      // fetch("/health") -- una URL relativa que apuntaba al origen del
+      // frontend, no al backend, así que este chequeo nunca funcionó de
+      // verdad (ver healthAPI.check() en services/api.js).
+      healthAPI
+        .check()
+        .then((r) => setAiAvailable(r.data.ai_available !== false))
         .catch(() => setAiAvailable(true)); // asumir disponible si falla el check
     }
   }, [open]);
@@ -156,7 +172,7 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
       style={{
         width: embedded ? "100%" : "min(420px, calc(100vw - 24px))",
         height: embedded ? "calc(100vh - 58px)" : "min(660px, calc(100vh - 108px))",
-        background: "#fff",
+        background: "var(--botiq-card-bg)",
         borderRadius: embedded ? 0 : 20,
         boxShadow: embedded ? "none" : "0 24px 72px rgba(39,33,99,0.26)",
         display: "flex",
@@ -181,17 +197,12 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
       )}
 
       {!aiAvailable && (
-        <div style={{
-          background: "#fef9c3",
-          borderBottom: "1px solid #fde047",
-          padding: "8px 16px",
-          fontSize: 12,
-          color: "#713f12",
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-        }}>
-          ⚠️ <strong>IA no disponible</strong> — operando en modo limitado. Las respuestas pueden ser básicas.
+        <div
+          className="botiq-clay-chip botiq-clay-chip--warning botiq-clay-chip--inset botiq-clay-badge-pulse"
+          style={{ margin: "8px 12px 0", alignSelf: "flex-start" }}
+          title="Vertex AI no está disponible en este momento. BOTIQ sigue respondiendo con FAQs y base de conocimiento, pero sin generación de IA."
+        >
+          🟡 Modo degradado — respuestas básicas
         </div>
       )}
 
@@ -233,7 +244,7 @@ export default function ChatWidget({ position = "bottom-right", primaryColor = C
         {loading && (
           <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
             <BotiqAvatar size={28} color={primaryColor} />
-            <div style={{ background: "#f5f5fa", borderRadius: "4px 12px 12px 12px", padding: "10px 14px" }}>
+            <div style={{ background: "var(--botiq-surface)", borderRadius: "4px 12px 12px 12px", padding: "10px 14px" }}>
               <Typing />
             </div>
           </div>
@@ -352,7 +363,7 @@ function ProfileSelector({
         Antes de iniciar
       </p>
 
-      <p style={{ color: "#6b6b8a", fontSize: 12, marginBottom: 16, lineHeight: 1.6 }}>
+      <p style={{ color: "var(--botiq-muted)", fontSize: 12, marginBottom: 16, lineHeight: 1.6 }}>
         Indícame tu perfil para configurar el flujo conversacional, las fuentes de conocimiento y los controles de uso de IA.
       </p>
 
@@ -382,7 +393,7 @@ function ProfileSelector({
         </button>
       </div>
 
-      <div style={{ marginTop: 14, fontSize: 11, color: "#6b6b8a", lineHeight: 1.5 }}>
+      <div style={{ marginTop: 14, fontSize: 11, color: "var(--botiq-muted)", lineHeight: 1.5 }}>
         BOTIQ registra logs de conversación, limita preguntas por sesión y bloquea temas fuera del negocio.
       </div>
 
@@ -397,13 +408,13 @@ function ProfileSelector({
 
 function SessionBanner({ session, status }) {
   const profile = session.selected_profile === "support_engineer" ? "Ingeniero de Soporte" : "Empleado";
-  const color = status === "active" ? "#059669" : status === "blocked" ? "#dc2626" : "#6b6b8a";
+  const color = status === "active" ? "#059669" : status === "blocked" ? "#dc2626" : "var(--botiq-muted)";
   const used = session.question_count || 0;
   const max = session.max_questions || 0;
   const remaining = Math.max(max - used, 0);
 
   return (
-    <div style={{ background: "#f5f5fa", border: "1px solid #e2e1f0", borderRadius: 12, padding: 10, fontSize: 11, color: "#374151" }}>
+    <div style={{ background: "var(--botiq-surface)", border: "1px solid var(--botiq-border)", borderRadius: 12, padding: 10, fontSize: 11, color: "#374151" }}>
       <strong>{profile}</strong> · Estado: <span style={{ color, fontWeight: 800 }}>{status}</span> · Restantes: {remaining}/{max}
       {session.ticket_eligible && (
         <div style={{ marginTop: 6, color: "#d97706", fontWeight: 800 }}>
@@ -421,7 +432,7 @@ function SessionBanner({ session, status }) {
 
 function Composer({ input, setInput, send, handleKey, fileRef, handleFile, loading, imgFile, disabled, primaryColor }) {
   return (
-    <div style={{ padding: "10px 14px", borderTop: `1px solid ${primaryColor}15`, background: "#fff" }}>
+    <div style={{ padding: "10px 14px", borderTop: `1px solid ${primaryColor}15`, background: "var(--botiq-card-bg)" }}>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 7 }}>
         <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: "none" }} onChange={handleFile} />
 
@@ -436,7 +447,7 @@ function Composer({ input, setInput, send, handleKey, fileRef, handleFile, loadi
           onKeyDown={handleKey}
           placeholder={disabled ? "Sesión finalizada" : "Escribe tu consulta corporativa..."}
           rows={1}
-          style={{ flex: 1, border: `1.5px solid ${primaryColor}20`, borderRadius: 18, padding: "9px 13px", fontSize: 13, resize: "none", outline: "none", maxHeight: 80, background: disabled ? "#f5f5fa" : "#fafafa" }}
+          style={{ flex: 1, border: `1.5px solid ${primaryColor}20`, borderRadius: 18, padding: "9px 13px", fontSize: 13, resize: "none", outline: "none", maxHeight: 80, background: disabled ? "var(--botiq-surface)" : "#fafafa" }}
         />
 
         <button
@@ -462,18 +473,19 @@ function Composer({ input, setInput, send, handleKey, fileRef, handleFile, loadi
 function Bubble({ msg, primaryColor, onFeedback }) {
   const isUser = msg.role === "user";
   const mod = MODULE_INFO[msg.meta?.module];
+  const answerSourceInfo = ANSWER_SOURCE_INFO[msg.meta?.answerSource];
   const rated = msg.meta?.userRating;
 
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexDirection: isUser ? "row-reverse" : "row" }}>
-      {isUser ? <Ava color="#e2e1f0" size={28}>👤</Ava> : <BotiqAvatar size={28} color={primaryColor} />}
+      {isUser ? <Ava color="var(--botiq-border)" size={28}>👤</Ava> : <BotiqAvatar size={28} color={primaryColor} />}
 
       <div style={{ maxWidth: "78%" }}>
         <div
           className="botiq-chat-bubble-text"
           style={{
-            background: isUser ? `linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd)` : msg.meta?.isError ? "#fef2f2" : msg.meta?.system ? "#eef2ff" : "#f5f5fa",
-            color: isUser ? "#fff" : msg.meta?.isError ? "#dc2626" : "#1a1a2e",
+            background: isUser ? `linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd)` : msg.meta?.isError ? "#fef2f2" : msg.meta?.system ? "#eef2ff" : "var(--botiq-surface)",
+            color: isUser ? "#fff" : msg.meta?.isError ? "#dc2626" : "var(--botiq-text)",
             borderRadius: isUser ? "14px 4px 14px 14px" : "4px 14px 14px 14px",
             padding: "10px 14px",
             fontSize: 13,
@@ -485,6 +497,11 @@ function Bubble({ msg, primaryColor, onFeedback }) {
         </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4, alignItems: "center" }}>
+          {answerSourceInfo && !isUser && (
+            <span className={`botiq-clay-chip botiq-clay-chip--${answerSourceInfo.variant}`}>
+              {answerSourceInfo.icon} {answerSourceInfo.label}
+            </span>
+          )}
           {mod && !isUser && <Meta color={mod.color}>{mod.icon} {mod.label}</Meta>}
           {msg.meta?.questionCount !== undefined && <Meta>{msg.meta.questionCount}/{msg.meta.maxQuestions} preguntas</Meta>}
           {msg.meta?.applicationStatus && <Meta color="#0284c7">🔎 estado consultado</Meta>}
@@ -562,7 +579,7 @@ function SatisfactionModal({ primaryColor, onSubmit, onSkip }) {
       <p style={{ fontWeight: 800, fontSize: 15, color: primaryColor, textAlign: "center", margin: 0 }}>
         ¿Fue útil la atención?
       </p>
-      <p style={{ fontSize: 12, color: "#6b6b8a", textAlign: "center", margin: 0 }}>
+      <p style={{ fontSize: 12, color: "var(--botiq-muted)", textAlign: "center", margin: 0 }}>
         Tu calificación ayuda a mejorar BOTIQ
       </p>
 
@@ -575,7 +592,7 @@ function SatisfactionModal({ primaryColor, onSubmit, onSkip }) {
               border: `1.5px solid ${selected === opt.score ? primaryColor : "#e5e7eb"}`,
               borderRadius: 10,
               padding: "10px 14px",
-              background: selected === opt.score ? `${primaryColor}12` : "#fff",
+              background: selected === opt.score ? `${primaryColor}12` : "var(--botiq-card-bg)",
               color: selected === opt.score ? primaryColor : "#374151",
               cursor: "pointer",
               fontWeight: selected === opt.score ? 700 : 400,
@@ -606,7 +623,7 @@ function SatisfactionModal({ primaryColor, onSubmit, onSkip }) {
           onClick={onSkip}
           style={{
             flex: 1, border: "1px solid #e5e7eb", borderRadius: 8,
-            padding: "9px 0", background: "#fff", color: "#6b6b8a",
+            padding: "9px 0", background: "var(--botiq-card-bg)", color: "var(--botiq-muted)",
             cursor: "pointer", fontSize: 13,
           }}
         >
@@ -630,7 +647,7 @@ function SatisfactionModal({ primaryColor, onSubmit, onSkip }) {
   );
 }
 
-function Meta({ children, color = "#6b6b8a" }) {
+function Meta({ children, color = "var(--botiq-muted)" }) {
   return <span style={{ fontSize: 10, color }}>{children}</span>;
 }
 
@@ -666,9 +683,9 @@ function quickBtn(primaryColor) {
 
 function profileBtn(primaryColor, active) {
   return {
-    background: active ? `${primaryColor}18` : "#f5f5fa",
+    background: active ? `${primaryColor}18` : "var(--botiq-surface)",
     color: primaryColor,
-    border: `1px solid ${active ? primaryColor : "#e2e1f0"}`,
+    border: `1px solid ${active ? primaryColor : "var(--botiq-border)"}`,
     borderRadius: 14,
     padding: "14px 8px",
     cursor: "pointer",
@@ -709,7 +726,7 @@ const warningBanner = {
 
 const profileSub = {
   fontSize: 10,
-  color: "#6b6b8a",
+  color: "var(--botiq-muted)",
   fontWeight: 650,
 };
 

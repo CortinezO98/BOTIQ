@@ -6,6 +6,85 @@ Versionamiento basado en [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.16.0] — 2026-07-15
+
+Modo oscuro (activado, no solo variables preparadas) + skeleton loaders. Cierra los dos últimos ítems de la tabla UX/UI de la auditoría original.
+
+### Agregado
+- **Toggle de modo oscuro** (☀️/🌙 en el navbar): persistido en `localStorage` (preferencia de UI, no dato de sesión — no aplica la restricción de tokens/sesión), respeta `prefers-color-scheme` la primera vez que se abre la app.
+- **`hooks/useTheme.jsx`**: `ThemeProvider` + `useTheme()`, mismo patrón de Context que `useAuth`. Setea `data-theme` en `<html>`.
+- **`[data-theme="dark"]`** en `index.css`: redefine `--botiq-surface`, `--botiq-card-bg` (nueva variable), `--botiq-border`, `--botiq-text`, `--botiq-muted`, `--botiq-shadow` y las `--clay-*`. Ningún componente necesita lógica propia de tema mientras use estas variables.
+- **`components/Skeleton/index.jsx`**: `Skeleton`, `SkeletonCard`, `SkeletonKpiRow` — superficie clay con shimmer (respeta `prefers-reduced-motion`). Aplicado en `Dashboard` (imita la estructura real: header + KPIs + gráficas) y `GovernancePage` (listas de incidentes/IA general).
+- `hooks/useTheme.test.jsx`: toggle real, persistencia, atributo `data-theme`, error explícito fuera de `ThemeProvider`.
+
+### Cambiado
+- **Migración de colores hardcodeados a variables CSS en ~20 archivos** (páginas y componentes): las constantes repetidas (`#fff`, `#f5f5fa`, `#e2e1f0`, `#1a1a2e`, `#6b6b8a`) pasan a `var(--botiq-*)`. Los colores de marca (`#272163` y variantes, badges de éxito/error/advertencia/info) se mantienen iguales en ambos temas — decisión de alcance: solo cambian superficie, borde y texto neutro, no el acento de marca.
+- `.botiq-card` en `index.css`: usaba `#fff` hardcodeado en vez de variable — corregido a `var(--botiq-card-bg)`.
+
+### Notas de auditoría
+- La migración de color se hizo en dos pasadas (colores como valor completo de un string, y colores embebidos en strings más largos tipo `"1px solid #e2e1f0"`), con clasificación automática y manual de casos ambiguos (texto blanco fijo sobre botones de color vs. fondo de panel que sí debe cambiar). Validado con lint + 14 tests tras cada pasada.
+- Cobertura de modo oscuro: todas las páginas principales migradas (Chat, Dashboard, Usuarios, FAQs, Base de Conocimiento, Logs, Reportes, Gobierno de IA, Seguridad, Login) más los componentes compartidos (Navbar, ChatWidget, ChatHistory, marca). Verificado manualmente por el usuario en varias pantallas.
+- Con esto se completan los 8 ítems de la tabla UX/UI de la auditoría original (Fase 1 del backlog de UX cerrado por completo).
+
+---
+
+## [1.15.0] — 2026-07-15
+
+Tablas responsive (backlog de UX de la auditoría) — revisión completa de las páginas admin con tablas densas.
+
+### Agregado
+- **`UsersPage.jsx`**: versión de tarjetas para móvil (`<768px`, vía `.botiq-mobile-only`), con claymorfismo real (`.botiq-clay-surface`: radio de 20px, sombra doble externa/interna). Antes la tabla no tenía ninguna alternativa responsive.
+- `UsersPage.test.jsx`: confirma que tabla (desktop) y tarjetas (mobile) conviven en el DOM, con el CSS decidiendo cuál se muestra según el ancho.
+
+### Corregido
+- Conflicto de CSS al armar el layout de tarjetas: la clase `.botiq-mobile-only` ya existente fuerza `display: block !important` en el breakpoint móvil, lo que pisaba el `display: grid` necesario para el espaciado entre tarjetas. Resuelto separando el toggle de visibilidad (clase) del layout (div anidado sin esa clase).
+
+### Notas de auditoría
+- **Revisión de todas las páginas admin con tablas, no solo las que señalaba la auditoría original**: `ConversationLogsPage` ya tenía tarjetas para móvil (`LogCard`, agregado en una sesión anterior), `ReportsPage` no usa tablas densas (gráficas + ranking en cards, ya responsive por diseño) — ninguna de las dos tenía el problema real. `FaqsPage` también ya usa cards. `UsersPage` era el único gap genuino.
+- Quedan pendientes de la tabla UX/UI original, ambos prioridad Baja: skeleton loaders en dashboard, y activar el modo oscuro (las variables `--clay-*-dark` ya están definidas desde 1.14.0, falta el toggle y aplicarlas en los componentes).
+
+---
+
+## [1.14.0] — 2026-07-15
+
+Primera tanda de claymorfismo (backlog de UX de la auditoría): sistema de diseño base + los dos ítems de prioridad Alta de la tabla UX/UI.
+
+### Agregado
+- **Sistema de diseño claymorfismo** en `index.css`: variables `--clay-*` (superficie con degradado, sombra doble externa/interna, radios) como capa adicional sobre el sistema `--botiq-*` existente, sin reemplazarlo. Utilidades `.botiq-clay-surface`, `.botiq-clay-chip` (+ variantes `--warning/--success/--info/--danger/--purple/--inset`), `.botiq-clay-badge-pulse`. Variables `--clay-*-dark` ya preparadas para modo oscuro (sin activar todavía).
+- **Badge de "Modo degradado"** en `ChatWidget`: chip claymorphism con sombra interna y pulso sutil, visible cuando Vertex AI no está disponible.
+- **Chip de fuente de respuesta** en cada mensaje del bot: FAQ / Base de conocimiento / Matriz interna / Web aprobado / Web pendiente de aprobación / IA general, con color distinto por categoría.
+- Backend: `ChatMessageResponse.answer_source` (nuevo campo) — antes esta información solo se guardaba en `Message.metadata_` (base de datos), nunca viajaba en la respuesta HTTP en vivo del chat. `_determine_answer_source()` en `chat.py` la calcula a partir de flags que ya existían en `bot_result`.
+- `services/api.js`: `healthAPI.check()`.
+- Errores de login diferenciados (`useAuth.jsx`): 401 credenciales incorrectas, 403 cuenta desactivada, 429 rate limit — antes todo mostraba el mismo mensaje genérico.
+- Sombra soft-3D en la card de `LoginPage`.
+
+### Corregido
+- **`ChatWidget` chequeaba disponibilidad de IA con `fetch("/health")`, una URL relativa que apuntaba al origen del propio frontend, no al backend** — nunca funcionó de verdad, ni en dev ni en producción (el `.catch()` silenciaba el error asumiendo IA disponible). Reemplazado por `healthAPI.check()`, que construye la URL correcta a partir de la config real del backend.
+
+### Notas de auditoría
+- Pendiente de la tabla UX/UI: `ConversationLogsPage`/`ReportsPage` responsive (tablas → cards en <768px, Media), skeleton loaders (Baja), modo oscuro activado (Baja — variables ya están, falta el toggle y aplicar en todos los componentes).
+- El cambio de `chat.py` se validó por diff preciso (4 puntos de inserción, todos aditivos) más `py_compile`, no con un test de integración end-to-end contra Postgres — habría requerido simular ChromaDB/Vertex AI, fuera de alcance para este ítem. Validado manualmente por el usuario contra la app real.
+
+---
+
+## [1.13.0] — 2026-07-15
+
+Panel de gobierno de IA (Fase 2 de la auditoría): primera pantalla que conecta endpoints de backend que existían hace tiempo pero nunca tuvieron frontend.
+
+### Agregado
+- **`pages/GovernancePage.jsx`** (`/dashboard/governance`, nuevo link "🛡️ Gobierno IA" en el navbar de admin):
+  - **Alertas de incidentes masivos**: `/admin/incident-alerts` — reconocer/resolver por alerta, badge de severidad, usuarios afectados. Este endpoint existía desde antes de esta sesión pero nunca tuvo ninguna pantalla.
+  - **Respuestas de IA general pendientes**: `/admin/ai-knowledge-cache` — aprobar (convierte en FAQ) o rechazar respuestas generadas por `general_assistant_service` sin fuente interna ni resultado de búsqueda web, con `confidence_score` visible (codificado por color). Tampoco tenía pantalla hasta ahora.
+  - **Resumen de feedback y satisfacción**: `/chat/feedback/summary` — tasa de aprobación 👍/👎, tasa de resolución, mensajes peor calificados. Sin consumo en el frontend hasta ahora.
+- `adminAPI` en `services/api.js`: `listAiKnowledge`, `approveAiKnowledge`, `rejectAiKnowledge`, `listIncidentAlerts`, `incidentAlertsCount`, `acknowledgeIncident`, `resolveIncident`, `feedbackSummary`.
+- **`pages/GovernancePage.test.jsx`**: test de humo con datos mockeados de las 3 fuentes (feedback, incidentes, IA general).
+
+### Notas de auditoría
+- `FaqsPage.jsx` ya cubría la aprobación de sugerencias con `source_type="web_search"` — este panel se enfoca en lo que no tenía pantalla (`general_ai`, incidentes, feedback), no duplica esa pantalla existente.
+- Pendiente de Fase 2: panel de tickets Aranda, dashboard de costos de IA, centro de conocimiento unificado (quedan como ítems propios del backlog).
+
+---
+
 ## [1.12.0] — 2026-07-15
 
 Actualización de dependencias con vulnerabilidades conocidas (`pip-audit`): `pypdf`, `Pillow`, `aiohttp`. Primera tanda del plan de actualización mayor — quedan pendientes `protobuf` y `starlette` (ver Notas).

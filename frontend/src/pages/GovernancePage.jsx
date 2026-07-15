@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Navbar from "../components/Layout/Navbar";
 import { adminAPI } from "../services/api";
+import { SkeletonCard } from "../components/Skeleton";
 
 const C = "#272163";
 
@@ -8,7 +9,7 @@ const SEVERITY_INFO = {
   critical: { label: "Crítica", color: "#dc2626", bg: "#fef2f2" },
   high: { label: "Alta", color: "#d97706", bg: "#fffbeb" },
   medium: { label: "Media", color: "#0284c7", bg: "#eff6ff" },
-  low: { label: "Baja", color: "#6b6b8a", bg: "#f5f5fa" },
+  low: { label: "Baja", color: "var(--botiq-muted)", bg: "var(--botiq-surface)" },
 };
 
 const INCIDENT_STATUS_TABS = [
@@ -117,7 +118,7 @@ export default function GovernancePage() {
       <main className="botiq-page-main">
         <header style={{ marginBottom: 24 }}>
           <h1 style={{ color: C, fontSize: 24, margin: 0 }}>Gobierno de IA</h1>
-          <p style={{ color: "#6b6b8a", marginTop: 6, fontSize: 13 }}>
+          <p style={{ color: "var(--botiq-muted)", marginTop: 6, fontSize: 13 }}>
             Incidentes masivos, calidad de respuestas y aprobación de conocimiento generado sin fuente interna.
           </p>
         </header>
@@ -141,9 +142,12 @@ export default function GovernancePage() {
           </div>
 
           {loading ? (
-            <p style={{ color: "#6b6b8a", fontSize: 13 }}>Cargando...</p>
+            <div style={{ display: "grid", gap: 12 }}>
+              <SkeletonCard lines={2} />
+              <SkeletonCard lines={2} />
+            </div>
           ) : incidents.length === 0 ? (
-            <p style={{ color: "#6b6b8a", fontSize: 13 }}>No hay alertas en este estado.</p>
+            <p style={{ color: "var(--botiq-muted)", fontSize: 13 }}>No hay alertas en este estado.</p>
           ) : (
             <div style={{ display: "grid", gap: 12 }}>
               {incidents.map((alert) => {
@@ -159,7 +163,7 @@ export default function GovernancePage() {
                           {sev.label}
                         </span>
                       </div>
-                      <span style={{ color: "#6b6b8a", fontSize: 12 }}>
+                      <span style={{ color: "var(--botiq-muted)", fontSize: 12 }}>
                         {alert.affected_users_count} usuario(s) afectado(s)
                       </span>
                     </div>
@@ -202,7 +206,7 @@ export default function GovernancePage() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
             <div>
               <h2 style={sectionTitle}>Respuestas de IA general</h2>
-              <p style={{ color: "#6b6b8a", fontSize: 12, margin: 0, maxWidth: 560 }}>
+              <p style={{ color: "var(--botiq-muted)", fontSize: 12, margin: 0, maxWidth: 560 }}>
                 Respuestas generadas por Gemini sin fuente interna ni resultado de búsqueda web (último eslabón de
                 la cadena de respuesta). Aprobarlas las convierte en FAQ para futuras consultas.
               </p>
@@ -211,9 +215,12 @@ export default function GovernancePage() {
           </div>
 
           {loading ? (
-            <p style={{ color: "#6b6b8a", fontSize: 13, marginTop: 14 }}>Cargando...</p>
+            <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
+              <SkeletonCard lines={3} />
+              <SkeletonCard lines={3} />
+            </div>
           ) : aiItems.length === 0 ? (
-            <p style={{ color: "#6b6b8a", fontSize: 13, marginTop: 14 }}>No hay respuestas en este estado.</p>
+            <p style={{ color: "var(--botiq-muted)", fontSize: 13, marginTop: 14 }}>No hay respuestas en este estado.</p>
           ) : (
             <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
               {aiItems.map((item) => (
@@ -249,13 +256,13 @@ export default function GovernancePage() {
         {feedback?.worst_rated_messages?.length > 0 && (
           <section style={cardStyle}>
             <h2 style={sectionTitle}>Mensajes peor calificados</h2>
-            <p style={{ color: "#6b6b8a", fontSize: 12, marginTop: 0, marginBottom: 14 }}>
+            <p style={{ color: "var(--botiq-muted)", fontSize: 12, marginTop: 0, marginBottom: 14 }}>
               Respuestas del bot con más 👎 — candidatas a revisar en la base de conocimiento.
             </p>
             <div style={{ display: "grid", gap: 8 }}>
               {feedback.worst_rated_messages.map((m) => (
                 <div key={m.message_id} style={{ ...itemCard, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <code style={{ fontSize: 11, color: "#6b6b8a" }}>{m.message_id}</code>
+                  <code style={{ fontSize: 11, color: "var(--botiq-muted)" }}>{m.message_id}</code>
                   <span style={{ ...badgeStyle, background: "#fef2f2", color: "#991b1b" }}>{m.total_down} 👎</span>
                 </div>
               ))}
@@ -271,7 +278,7 @@ function Kpi({ label, value, sub, danger = false }) {
   return (
     <div style={{ ...cardStyle, marginBottom: 0, padding: 16, textAlign: "center" }}>
       <div style={{ fontSize: 22, fontWeight: 800, color: danger ? "#dc2626" : C }}>{value}</div>
-      <div style={{ fontSize: 11, color: "#6b6b8a", marginTop: 4 }}>{label}</div>
+      <div style={{ fontSize: 11, color: "var(--botiq-muted)", marginTop: 4 }}>{label}</div>
       {sub && <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>{sub}</div>}
     </div>
   );
@@ -295,13 +302,13 @@ function Tabs({ tabs, value, onChange }) {
           key={tab.value}
           onClick={() => onChange(tab.value)}
           style={{
-            border: "1px solid #e2e1f0",
+            border: "1px solid var(--botiq-border)",
             borderRadius: 8,
             padding: "6px 12px",
             fontSize: 12,
             fontWeight: 600,
             cursor: "pointer",
-            background: value === tab.value ? C : "#f5f5fa",
+            background: value === tab.value ? C : "var(--botiq-surface)",
             color: value === tab.value ? "#fff" : C,
           }}
         >
@@ -313,8 +320,8 @@ function Tabs({ tabs, value, onChange }) {
 }
 
 const cardStyle = {
-  background: "#fff",
-  border: "1px solid #e2e1f0",
+  background: "var(--botiq-card-bg)",
+  border: "1px solid var(--botiq-border)",
   borderRadius: 14,
   padding: 22,
   marginBottom: 22,
@@ -323,7 +330,7 @@ const cardStyle = {
 
 const itemCard = {
   background: "#fdfdff",
-  border: "1px solid #e2e1f0",
+  border: "1px solid var(--botiq-border)",
   borderRadius: 12,
   padding: 14,
 };
@@ -347,7 +354,7 @@ const primaryBtnBase = {
 };
 
 const smallPrimaryBtn = { ...primaryBtnBase, background: C, padding: "7px 12px", fontSize: 12 };
-const smallSecondaryBtn = { background: "#f5f5fa", color: C, border: "1px solid #e2e1f0", borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontWeight: 600, fontSize: 12 };
+const smallSecondaryBtn = { background: "var(--botiq-surface)", color: C, border: "1px solid var(--botiq-border)", borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontWeight: 600, fontSize: 12 };
 const smallDangerBtn = { background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontWeight: 600, fontSize: 12 };
 
 const alertStyle = {

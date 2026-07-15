@@ -15,8 +15,8 @@ export default function BotiqLogo({
   };
 
   const s = sizes[size] || sizes.md;
-  const textColor = isLight ? "#ffffff" : color;
-  const subtitleColor = isLight ? "rgba(255,255,255,0.72)" : "#6b6b8a";
+  const textColor = isLight ? "#fff" : color;
+  const subtitleColor = isLight ? "rgba(255,255,255,0.72)" : "var(--botiq-muted)";
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: size === "lg" ? 14 : 10 }}>
@@ -51,5 +51,3 @@ export default function BotiqLogo({
     </div>
   );
 }
-
-

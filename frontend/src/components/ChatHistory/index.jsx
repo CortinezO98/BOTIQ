@@ -24,7 +24,7 @@ export default function ChatHistory({ onSelect }) {
   }, []);
 
   return (
-    <aside className="botiq-chat-history" style={{ background: "#fff", borderRight: "1px solid #e2e1f0", minHeight: "calc(100vh - 58px)", padding: 16, overflowY: "auto" }}>
+    <aside className="botiq-chat-history" style={{ background: "var(--botiq-card-bg)", borderRight: "1px solid var(--botiq-border)", minHeight: "calc(100vh - 58px)", padding: 16, overflowY: "auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <h3 style={{ color: C, fontSize: 14, margin: 0 }}>Historial</h3>
         <button onClick={load} style={smallBtn}>↻</button>
@@ -47,7 +47,7 @@ export default function ChatHistory({ onSelect }) {
                 </span>
               </div>
 
-              <div style={{ color: "#6b6b8a", fontSize: 11, marginTop: 6 }}>
+              <div style={{ color: "var(--botiq-muted)", fontSize: 11, marginTop: 6 }}>
                 {new Date(c.created_at).toLocaleString()}
               </div>
 
@@ -75,13 +75,13 @@ export default function ChatHistory({ onSelect }) {
 function statusColor(status) {
   if (status === "active") return "#059669";
   if (status === "blocked") return "#dc2626";
-  return "#6b6b8a";
+  return "var(--botiq-muted)";
 }
 
 function Tag({ children, danger = false, ok = false, warn = false }) {
-  let background = "#f5f5fa";
+  let background = "var(--botiq-surface)";
   let color = C;
-  let border = "#e2e1f0";
+  let border = "var(--botiq-border)";
 
   if (danger) {
     background = "#fef2f2";
@@ -108,11 +108,11 @@ function Tag({ children, danger = false, ok = false, warn = false }) {
   );
 }
 
-const muted = { color: "#6b6b8a", fontSize: 12, lineHeight: 1.5 };
+const muted = { color: "var(--botiq-muted)", fontSize: 12, lineHeight: 1.5 };
 
 const smallBtn = {
-  border: "1px solid #e2e1f0",
-  background: "#f5f5fa",
+  border: "1px solid var(--botiq-border)",
+  background: "var(--botiq-surface)",
   color: C,
   width: 28,
   height: 28,
@@ -122,12 +122,9 @@ const smallBtn = {
 
 const itemBtn = {
   textAlign: "left",
-  border: "1px solid #e2e1f0",
+  border: "1px solid var(--botiq-border)",
   background: "#fdfdff",
   borderRadius: 12,
   padding: 11,
   cursor: "pointer",
 };
-
-
-

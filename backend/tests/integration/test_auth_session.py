@@ -83,10 +83,15 @@ async def test_refresh_rotates_token_and_invalidates_previous_one(client):
     assert new_refresh_cookie
     assert new_refresh_cookie != old_refresh_cookie, "El refresh token debe rotar, no reutilizarse"
 
-    # El refresh token viejo ya fue revocado en la rotación: no debe servir más.
+    # El token viejo queda "rotado" (no revocado de inmediato): dentro del
+    # período de gracia (REFRESH_TOKEN_GRACE_SECONDS) todavía se acepta,
+    # para absorber ráfagas de peticiones concurrentes con la cookie vieja
+    # (varias pestañas, o varias llamadas paralelas del frontend). Ver
+    # tests/test_refresh_grace_period.py para la cobertura completa de este
+    # comportamiento, incluyendo que SÍ se rechaza pasado ese período.
     client.cookies.set(settings.REFRESH_TOKEN_COOKIE_NAME, old_refresh_cookie)
     r = await client.post("/api/v1/auth/refresh")
-    assert r.status_code == 401
+    assert r.status_code == 200, r.text
 
 
 @pytest.mark.asyncio
