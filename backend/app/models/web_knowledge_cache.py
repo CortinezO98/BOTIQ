@@ -32,6 +32,7 @@ class WebKnowledgeCache(Base):
 
     confidence = Column(Float, default=0.0)
     status = Column(String(30), default="pending", index=True)  # pending | approved | rejected
+    source_type = Column(String(30),nullable=False,default="web_search",server_default="web_search",index=True,)
 
     web_search_used = Column(Boolean, default=True)
     usage_count = Column(Integer, default=0)

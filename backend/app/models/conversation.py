@@ -55,6 +55,13 @@ class Conversation(Base):
     aranda_ticket_id = Column(String(150), nullable=True, index=True)
     aranda_ticket_status = Column(String(100), nullable=True)
     aranda_ticket_created_at = Column(DateTime(timezone=True), nullable=True)
+    
+    
+    # Satisfacción al finalizar la conversación.
+    satisfaction_score = Column(Integer, nullable=True)
+    satisfaction_comment = Column(Text, nullable=True)
+    resolved_by_bot = Column(Boolean, nullable=True)
+    satisfaction_given_at = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
     ended_at = Column(DateTime(timezone=True), nullable=True)
