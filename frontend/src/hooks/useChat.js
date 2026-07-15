@@ -1,3 +1,4 @@
+import { useCallback, useRef, useState } from "react";
 import { chatAPI } from "../services/api";
 
 function normalizeError(error, fallback = "Error procesando solicitud.") {

@@ -6,6 +6,29 @@ Versionamiento basado en [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.5.0] — 2026-07-14
+
+Cierre del primer sprint de estabilización técnica (Fase 1 de la auditoría SWEBOK).
+
+### Corregido
+- **Crash de `useChat.js` en runtime**: el hook usaba `useState`, `useCallback` y `useRef` sin importarlos de `react`. Afectaba a `ChatWidget` completo (`Uncaught ReferenceError: useState is not defined`).
+- **Crash de `ChatWidget/index.jsx` en runtime**: mismo patrón — `useState`, `useEffect` y `useRef` usados sin importar. Además tenía una llave de cierre duplicada (`}}`) al final de `SatisfactionModal` que producía un error de sintaxis.
+- **Crash de `Dashboard/index.jsx` en runtime**: mismo patrón — `useState`, `useEffect` y `useMemo` usados sin importar (`Uncaught ReferenceError: useMemo is not defined`).
+- **`feedback.py` e `incidents.py` no estaban registrados** en `api/v1/__init__.py`: los botones de feedback 👍/👎 y la encuesta de satisfacción del frontend (`useChat.js: submitFeedback`, `submitSatisfaction`) fallaban con 404 porque el router nunca se montó. Ahora `feedback.router` se monta bajo `/chat` (coincide con lo que ya llama `api.js`) e `incidents.router` se monta bajo `/admin` y `/dashboard` (según su propio diseño original: aprobación de respuestas de IA general y alertas de incidentes masivos).
+- **`LOGIN_RATE_LIMIT` y `CHAT_RATE_LIMIT` definidos pero nunca aplicados**: solo el límite global `API_RATE_LIMIT` (120/min) protegía `/auth/login`. Ahora `@limiter.limit(settings.LOGIN_RATE_LIMIT)` se aplica explícitamente en `/auth/login` y `/auth/register` (10/min).
+- **Comparación de email inconsistente entre mayúsculas/minúsculas**: `admin.create_user` normalizaba el email a minúsculas pero `auth.register` y `auth.login` no. Ahora ambos usan `func.lower(User.email)` en la comparación, sin depender de que los emails ya existentes en la base estén guardados en minúsculas.
+- **Sin validación de configuración insegura en producción**: no existía nada que impidiera arrancar con `ENVIRONMENT=production` usando el `SECRET_KEY` de desarrollo (público en el repo) o con `DEBUG=true`. Ahora `Settings` tiene un `@model_validator` que bloquea el arranque en ese caso.
+
+### Cambiado
+- `app/core/rate_limit.py` (nuevo): la instancia de `Limiter` de slowapi se extrajo de `main.py` a su propio módulo para poder importarla desde `auth.py` (y futuras routes) sin generar un import circular.
+- `main.py`: ahora importa `limiter` desde `app.core.rate_limit` en vez de definirlo inline. Sin cambio de comportamiento.
+
+### Notas de auditoría
+- Se revisó todo `frontend/src/**/*.{js,jsx}` en busca del mismo patrón de hooks de React sin importar. Solo los 3 archivos listados arriba tenían el problema; el resto está correcto.
+- Pendiente para el próximo sprint: JWT en `localStorage` sin refresh token (Fase 1 — Alta), `/auth/register` público sin restricción de dominio (Fase 1 — Alta), CI con `ruff`/`bandit`/`pip-audit` corriendo con `|| true` (no bloquean merges), 0 pruebas de frontend configuradas.
+
+---
+
 ## [1.4.0] — 2026-07-02
 
 ### Agregado

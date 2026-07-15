@@ -1,5 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import hashlib
+import secrets
+
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
@@ -41,3 +44,19 @@ def decode_token(token: str) -> dict:
         raise exc
 
 
+def generate_refresh_token() -> str:
+    """
+    Token opaco de alta entropía (NO es un JWT, no lleva payload legible).
+    Se entrega al navegador en una cookie httpOnly y se guarda hasheado en DB.
+    """
+    return secrets.token_urlsafe(48)
+
+
+def hash_refresh_token(token: str) -> str:
+    """
+    SHA-256 alcanza aquí (no hace falta bcrypt): el token ya es aleatorio
+    de alta entropía, no una contraseña adivinable por fuerza bruta. El
+    hash solo evita que una fuga de la tabla refresh_tokens exponga
+    sesiones válidas en texto plano.
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

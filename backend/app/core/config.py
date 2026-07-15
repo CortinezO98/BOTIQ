@@ -1,20 +1,33 @@
 from functools import lru_cache
 from typing import List
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
+
+# Valor por defecto de desarrollo. Se usa también para detectar si alguien
+# olvidó sobreescribir SECRET_KEY en un .env de producción real.
+_DEV_SECRET_KEY = "dev-secret-change-in-production-32chars!!"
 
 
 class Settings(BaseSettings):
     APP_NAME: str = "BOTIQ"
-    APP_VERSION: str = "1.3.0"
+    APP_VERSION: str = "1.5.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
     DATABASE_URL: str = "postgresql://botiq_user:botiq_pass@db:5432/botiq_db"
 
-    SECRET_KEY: str = "dev-secret-change-in-production-32chars!!"
+    SECRET_KEY: str = _DEV_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
+
+    # ── Sesión por cookie httpOnly + refresh token ──────────────────────────
+    # El access token JWT sigue viviendo también en el body de /auth/login
+    # (compatibilidad con Swagger/Postman/scripts), pero el navegador ya no
+    # lo guarda en localStorage: usa estas cookies httpOnly automáticamente.
+    ACCESS_TOKEN_COOKIE_NAME: str = "botiq_access_token"
+    REFRESH_TOKEN_COOKIE_NAME: str = "botiq_refresh_token"
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
     GCP_PROJECT_ID: str = ""
     GCP_LOCATION: str = "us-central1"
@@ -167,6 +180,34 @@ class Settings(BaseSettings):
 
     def get_out_of_scope_keywords(self) -> List[str]:
         return [k.strip().lower() for k in self.OUT_OF_SCOPE_KEYWORDS.split(",") if k.strip()]
+
+    @model_validator(mode="after")
+    def _validate_production_safety(self) -> "Settings":
+        """
+        Bloquea el arranque si ENVIRONMENT=production pero la configuración
+        todavía tiene valores de desarrollo peligrosos. Esto evita que un
+        .env.prod mal copiado (o nunca sobreescrito) llegue a producción
+        con la SECRET_KEY pública del repo o con DEBUG=True.
+
+        Si esto revienta el arranque en tu entorno, es intencional: significa
+        que backend/.env.prod todavía no tiene SECRET_KEY propio o DEBUG=false.
+        """
+        if self.ENVIRONMENT.lower() == "production":
+            problems: List[str] = []
+            if self.SECRET_KEY == _DEV_SECRET_KEY or len(self.SECRET_KEY) < 32:
+                problems.append(
+                    "SECRET_KEY sigue siendo el valor de desarrollo o es demasiado corto "
+                    "(mínimo 32 caracteres). Genera uno con: "
+                    "python -c \"import secrets; print(secrets.token_hex(32))\""
+                )
+            if self.DEBUG:
+                problems.append("DEBUG=true en ENVIRONMENT=production. Debe ser false.")
+
+            if problems:
+                raise ValueError(
+                    "Configuración insegura para producción:\n- " + "\n- ".join(problems)
+                )
+        return self
 
     class Config:
         env_file = ".env"

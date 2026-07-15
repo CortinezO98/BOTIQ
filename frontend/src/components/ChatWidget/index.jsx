@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { useChat } from "../../hooks/useChat";
 import { supportAPI } from "../../services/api";
 import BotiqAvatar from "../Brand/BotiqAvatar";
@@ -627,7 +628,7 @@ function SatisfactionModal({ primaryColor, onSubmit, onSkip }) {
       </div>
     </div>
   );
-}}
+}
 
 function Meta({ children, color = "#6b6b8a" }) {
   return <span style={{ fontSize: 10, color }}>{children}</span>;
@@ -725,6 +726,5 @@ const closeImageBtn = {
   color: "#fff",
   fontSize: 11,
 };
-
 
 

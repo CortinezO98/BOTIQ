@@ -1,36 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 import { authAPI } from "../services/api";
 
-function readUser() {
-  try {
-    return JSON.parse(localStorage.getItem("botiq_user"));
-  } catch {
-    return null;
-  }
-}
-
 export function useAuth() {
-  const [user, setUser] = useState(readUser);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState(null);
 
+  // Ya no leemos token de localStorage: la cookie httpOnly viaja sola con
+  // cada petición (withCredentials en api.js). Para saber si hay sesión
+  // activa, simplemente preguntamos a /auth/me.
   const syncUser = useCallback(async () => {
-    const token = localStorage.getItem("botiq_token");
-    if (!token) {
-      setUser(null);
-      return null;
-    }
-
     setCheckingSession(true);
     try {
       const { data } = await authAPI.me();
-      localStorage.setItem("botiq_user", JSON.stringify(data));
       setUser(data);
       return data;
     } catch {
-      localStorage.removeItem("botiq_token");
-      localStorage.removeItem("botiq_user");
       setUser(null);
       return null;
     } finally {
@@ -47,8 +33,7 @@ export function useAuth() {
     setError(null);
     try {
       const { data } = await authAPI.login(email, password);
-      localStorage.setItem("botiq_token", data.access_token);
-      localStorage.setItem("botiq_user", JSON.stringify(data.user));
+      // El backend ya seteó las cookies httpOnly en esta misma respuesta.
       setUser(data.user);
       return data.user;
     } catch (err) {
@@ -60,9 +45,13 @@ export function useAuth() {
     }
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem("botiq_token");
-    localStorage.removeItem("botiq_user");
+  const logout = useCallback(async () => {
+    try {
+      // Revoca el refresh token en el backend y limpia las cookies.
+      await authAPI.logout();
+    } catch {
+      // Si el backend no responde, igual limpiamos el estado local.
+    }
     setUser(null);
     window.location.href = "/login";
   }, []);
@@ -79,7 +68,3 @@ export function useAuth() {
     isSupport: ["support_engineer", "admin"].includes(user?.role),
   };
 }
-
-
-
-

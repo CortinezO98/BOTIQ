@@ -1,22 +1,48 @@
+import axios from "axios";
+
 const API_URL = import.meta.env.VITE_API_URL || window.__BOTIQ_API_URL__ || "http://localhost:8002/api/v1";
 
 const api = axios.create({
   baseURL: API_URL,
   timeout: 30000,
+  // La sesión vive en cookies httpOnly (botiq_access_token / botiq_refresh_token).
+  // Sin esto, el navegador no manda ni recibe esas cookies en llamadas cross-origin
+  // (localhost:5180 -> localhost:8002 son orígenes distintos aunque mismo "site").
+  withCredentials: true,
 });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("botiq_token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+let refreshPromise = null;
 
+function isAuthEndpoint(url = "") {
+  return url.includes("/auth/login") || url.includes("/auth/refresh") || url.includes("/auth/register");
+}
+
+// Si una petición falla con 401 (access token vencido), intenta renovar la
+// sesión UNA vez vía /auth/refresh y reintenta la petición original. Si el
+// refresh también falla, la sesión realmente expiró y el error sigue su curso
+// normal (useAuth.syncUser lo interpreta como "sin sesión").
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem("botiq_token");
-      localStorage.removeItem("botiq_user");
+  async (error) => {
+    const original = error.config;
+    if (
+      error.response?.status === 401 &&
+      original &&
+      !original._retried &&
+      !isAuthEndpoint(original.url || "")
+    ) {
+      original._retried = true;
+      try {
+        if (!refreshPromise) {
+          refreshPromise = api.post("/auth/refresh").finally(() => {
+            refreshPromise = null;
+          });
+        }
+        await refreshPromise;
+        return api(original);
+      } catch {
+        // El refresh también falló: dejamos que el 401 original se propague.
+      }
     }
     return Promise.reject(error);
   }
@@ -30,6 +56,8 @@ export const authAPI = {
     return api.post("/auth/login", form);
   },
   me: () => api.get("/auth/me"),
+  refresh: () => api.post("/auth/refresh"),
+  logout: () => api.post("/auth/logout"),
 };
 
 export const chatAPI = {
