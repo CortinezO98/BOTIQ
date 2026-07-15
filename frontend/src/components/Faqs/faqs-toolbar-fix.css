@@ -1,0 +1,215 @@
+/* ==========================================================================
+   BOTIQ — CORRECCIÓN DEFINITIVA DE LA BARRA DE FILTROS FAQ
+   El contenedor exterior conserva el claymorfismo.
+   Los campos interiores quedan planos, transparentes y sin doble superficie.
+   ========================================================================== */
+
+.botiq-faqs-page .botiq-faqs-toolbar {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) auto auto auto;
+  align-items: center;
+  gap: 0;
+  min-height: 68px;
+  padding: 8px 12px;
+  overflow: visible;
+
+  background: var(--clay-surface, var(--faq-surface)) !important;
+  border: 1px solid var(--clay-border, var(--faq-border)) !important;
+  border-radius: 22px !important;
+  box-shadow: var(--clay-raised, var(--botiq-shadow)) !important;
+}
+
+/* Búsqueda: sin tarjeta interior */
+.botiq-faqs-page .botiq-faqs-search {
+  width: 100%;
+  min-width: 0;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+  overflow: hidden;
+}
+
+.botiq-faqs-page .botiq-faqs-search input,
+.botiq-faqs-page .botiq-faqs-search input:hover,
+.botiq-faqs-page .botiq-faqs-search input:focus,
+.botiq-faqs-page .botiq-faqs-search input:active {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 44px !important;
+  height: 44px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+
+  appearance: none !important;
+  -webkit-appearance: none !important;
+
+  color: var(--faq-text) !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+
+  border: 0 !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  outline: 0 !important;
+
+  box-shadow: none !important;
+  -webkit-box-shadow: none !important;
+  filter: none !important;
+}
+
+.botiq-faqs-page .botiq-faqs-search input::before,
+.botiq-faqs-page .botiq-faqs-search input::after {
+  content: none !important;
+  display: none !important;
+}
+
+.botiq-faqs-page .botiq-faqs-search > svg {
+  flex: 0 0 auto;
+  color: var(--faq-muted);
+}
+
+.botiq-faqs-page .botiq-faqs-search > button {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0 !important;
+
+  color: var(--faq-muted);
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+/* Selectores: transparentes, separados solo por una línea vertical */
+.botiq-faqs-page .botiq-faqs-select {
+  position: relative;
+  min-width: 185px;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  margin: 0;
+
+  background: transparent !important;
+  border: 0 !important;
+  border-left: 1px solid var(--faq-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+  overflow: hidden;
+}
+
+.botiq-faqs-page .botiq-faqs-select select,
+.botiq-faqs-page .botiq-faqs-select select:hover,
+.botiq-faqs-page .botiq-faqs-select select:focus,
+.botiq-faqs-page .botiq-faqs-select select:active {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 44px !important;
+  height: 44px !important;
+  margin: 0 !important;
+  padding: 0 26px 0 2px !important;
+
+  appearance: none !important;
+  -webkit-appearance: none !important;
+
+  color: var(--faq-text) !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+
+  border: 0 !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  outline: 0 !important;
+
+  box-shadow: none !important;
+  -webkit-box-shadow: none !important;
+  filter: none !important;
+}
+
+.botiq-faqs-page .botiq-faqs-select > svg:first-child {
+  flex: 0 0 auto;
+  color: var(--faq-muted);
+}
+
+.botiq-faqs-page .botiq-faqs-select > svg:last-child {
+  flex: 0 0 auto;
+  margin-left: -26px;
+  color: var(--faq-muted);
+  pointer-events: none;
+}
+
+/* Botón de limpiar sin tarjeta adicional */
+.botiq-faqs-page .botiq-faqs-clear {
+  min-height: 44px;
+  margin-left: 8px;
+  padding: 0 10px;
+
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  white-space: nowrap;
+}
+
+/* Elimina cualquier pseudo-elemento decorativo de controles internos */
+.botiq-faqs-page .botiq-faqs-search::before,
+.botiq-faqs-page .botiq-faqs-search::after,
+.botiq-faqs-page .botiq-faqs-select::before,
+.botiq-faqs-page .botiq-faqs-select::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* Tablet */
+@media (max-width: 1050px) {
+  .botiq-faqs-page .botiq-faqs-toolbar {
+    grid-template-columns: minmax(240px, 1fr) auto auto;
+  }
+
+  .botiq-faqs-page .botiq-faqs-clear {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-left: 0;
+  }
+}
+
+/* Móvil: cada control ocupa una fila, sin doble sombra */
+@media (max-width: 760px) {
+  .botiq-faqs-page .botiq-faqs-toolbar {
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 8px 12px;
+  }
+
+  .botiq-faqs-page .botiq-faqs-search,
+  .botiq-faqs-page .botiq-faqs-select,
+  .botiq-faqs-page .botiq-faqs-toolbar > .botiq-faqs-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .botiq-faqs-page .botiq-faqs-select {
+    border-left: 0 !important;
+    border-top: 1px solid var(--faq-border) !important;
+  }
+
+  .botiq-faqs-page .botiq-faqs-clear {
+    grid-column: auto;
+  }
+}

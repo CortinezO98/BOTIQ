@@ -1,0 +1,132 @@
+/* ==========================================================================
+   BOTIQ — CORRECCIÓN DEFINITIVA DE LA BARRA DE BÚSQUEDA FAQ
+   Elimina la "tarjeta exterior" para evitar el efecto de campo sobre campo.
+   Debe quedar AL FINAL de faqs.css.
+   ========================================================================== */
+
+.botiq-faqs-page .botiq-faqs-toolbar {
+  display: grid !important;
+  grid-template-columns: minmax(280px, 1fr) auto auto auto !important;
+  align-items: center !important;
+  gap: 12px !important;
+
+  padding: 0 !important;
+  margin-bottom: 18px !important;
+
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Cada control conserva su propia superficie */
+.botiq-faqs-page .botiq-faqs-search {
+  width: 100%;
+  min-width: 0;
+  min-height: 50px;
+  padding: 0 14px;
+
+  background: var(--clay-surface, var(--faq-surface)) !important;
+  border: 1px solid var(--clay-border, var(--faq-border)) !important;
+  border-radius: 16px !important;
+  box-shadow: var(--clay-raised-sm, var(--botiq-shadow)) !important;
+  overflow: hidden;
+}
+
+.botiq-faqs-page .botiq-faqs-search input,
+.botiq-faqs-page .botiq-faqs-search input:hover,
+.botiq-faqs-page .botiq-faqs-search input:focus,
+.botiq-faqs-page .botiq-faqs-search input:active {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 46px !important;
+  height: 46px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  outline: 0 !important;
+
+  box-shadow: none !important;
+  -webkit-box-shadow: none !important;
+  filter: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+}
+
+.botiq-faqs-page .botiq-faqs-select {
+  min-width: 180px;
+  min-height: 50px;
+  padding: 0 12px;
+
+  background: var(--clay-surface, var(--faq-surface)) !important;
+  border: 1px solid var(--clay-border, var(--faq-border)) !important;
+  border-radius: 16px !important;
+  box-shadow: var(--clay-raised-sm, var(--botiq-shadow)) !important;
+}
+
+.botiq-faqs-page .botiq-faqs-select select,
+.botiq-faqs-page .botiq-faqs-select select:hover,
+.botiq-faqs-page .botiq-faqs-select select:focus,
+.botiq-faqs-page .botiq-faqs-select select:active {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 46px !important;
+  height: 46px !important;
+  margin: 0 !important;
+  padding: 0 26px 0 3px !important;
+
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  outline: 0 !important;
+
+  box-shadow: none !important;
+  -webkit-box-shadow: none !important;
+  filter: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+}
+
+.botiq-faqs-page .botiq-faqs-search::before,
+.botiq-faqs-page .botiq-faqs-search::after,
+.botiq-faqs-page .botiq-faqs-select::before,
+.botiq-faqs-page .botiq-faqs-select::after {
+  content: none !important;
+  display: none !important;
+}
+
+@media (max-width: 1050px) {
+  .botiq-faqs-page .botiq-faqs-toolbar {
+    grid-template-columns: minmax(240px, 1fr) auto auto !important;
+  }
+
+  .botiq-faqs-page .botiq-faqs-clear {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 760px) {
+  .botiq-faqs-page .botiq-faqs-toolbar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .botiq-faqs-page .botiq-faqs-search,
+  .botiq-faqs-page .botiq-faqs-select,
+  .botiq-faqs-page .botiq-faqs-toolbar > .botiq-faqs-btn {
+    width: 100%;
+    min-width: 0;
+  }
+}

@@ -1,410 +1,1448 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  BarChart3,
+  BookOpenCheck,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+  Edit3,
+  ExternalLink,
+  FileSearch,
+  Filter,
+  Globe2,
+  Hash,
+  Layers3,
+  MoreHorizontal,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Tag,
+  Trash2,
+  X,
+  XCircle,
+} from "lucide-react";
+
 import AppShell from "../components/Layout/AppShell";
 import { adminAPI, faqAPI } from "../services/api";
+import "../components/Faqs/faqs.css";
 
-const C = "#272163";
-const CH = "var(--botiq-heading)"; // texto/headings: sí se adapta a modo oscuro (C se mantiene fijo por los patrones ${C}XX de alpha-transparencia)
-
-const initialForm = {
+const EMPTY_FORM = {
   question: "",
   answer: "",
   category: "",
   tagsText: "",
 };
 
+const PAGE_SIZE_OPTIONS = [6, 12, 24, 48];
+
+const SUGGESTION_STATUS = [
+  { value: "pending", label: "Pendientes" },
+  { value: "approved", label: "Aprobadas" },
+  { value: "rejected", label: "Rechazadas" },
+];
+
 export default function FaqsPage() {
   const [faqs, setFaqs] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
-  const [form, setForm] = useState(initialForm);
-  const [editing, setEditing] = useState(null);
-  const [editForm, setEditForm] = useState(initialForm);
-  const [editingSuggestion, setEditingSuggestion] = useState(null);
-  const [suggestionForm, setSuggestionForm] = useState(initialForm);
-  const [filter, setFilter] = useState("");
-  const [suggestionStatus, setSuggestionStatus] = useState("pending");
   const [loading, setLoading] = useState(true);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState("");
+  const [message, setMessage] = useState(null);
 
-  const loadFaqs = async () => {
-    setLoading(true);
-    setError("");
+  const [activeTab, setActiveTab] = useState("faqs");
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("usage_desc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+
+  const [suggestionStatus, setSuggestionStatus] = useState("pending");
+  const [suggestionSearch, setSuggestionSearch] = useState("");
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState(EMPTY_FORM);
+
+  const [editFaq, setEditFaq] = useState(null);
+  const [editForm, setEditForm] = useState(EMPTY_FORM);
+
+  const [editSuggestion, setEditSuggestion] = useState(null);
+  const [suggestionForm, setSuggestionForm] = useState(EMPTY_FORM);
+
+  const [rejectItem, setRejectItem] = useState(null);
+  const [rejectReason, setRejectReason] = useState("No aplica como FAQ interna");
+
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState("");
+
+  const loadFaqs = async ({ quiet = false } = {}) => {
+    if (!quiet) setLoading(true);
+    setMessage(null);
 
     try {
-      const [{ data: faqsData }, { data: suggestionsData }] = await Promise.all([
-        faqAPI.list(),
-        adminAPI.listWebKnowledge(suggestionStatus, filter, 100),
-      ]);
-      setFaqs(faqsData);
-      setSuggestions(suggestionsData);
-    } catch (err) {
-      setError(err.response?.data?.detail || "Error cargando FAQs o sugerencias web");
+      const { data } = await faqAPI.list();
+      setFaqs(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error.response?.data?.detail || "No fue posible cargar las FAQs.",
+      });
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
+    }
+  };
+
+  const loadSuggestions = async ({ quiet = false } = {}) => {
+    if (!quiet) setLoadingSuggestions(true);
+    setMessage(null);
+
+    try {
+      const { data } = await adminAPI.listWebKnowledge(
+        suggestionStatus,
+        suggestionSearch.trim(),
+        100,
+      );
+      setSuggestions(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text:
+          error.response?.data?.detail ||
+          "No fue posible cargar las sugerencias web.",
+      });
+    } finally {
+      if (!quiet) setLoadingSuggestions(false);
     }
   };
 
   useEffect(() => {
     loadFaqs();
+  }, []);
+
+  useEffect(() => {
+    loadSuggestions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestionStatus]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, categoryFilter, sortBy, pageSize]);
+
+  useEffect(() => {
+    const closeMenu = () => setOpenMenuId("");
+    window.addEventListener("click", closeMenu);
+    return () => window.removeEventListener("click", closeMenu);
+  }, []);
+
+  const categories = useMemo(() => {
+    return [...new Set(faqs.map((faq) => faq.category).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, "es"));
+  }, [faqs]);
+
+  const metrics = useMemo(() => {
+    const totalHits = faqs.reduce((sum, faq) => sum + Number(faq.hit_count || 0), 0);
+    const used = faqs.filter((faq) => Number(faq.hit_count || 0) > 0).length;
+    const pending = suggestionStatus === "pending"
+      ? suggestions.length
+      : suggestions.filter((item) => item.status === "pending").length;
+
+    return {
+      total: faqs.length,
+      categories: categories.length,
+      totalHits,
+      used,
+      pending,
+    };
+  }, [faqs, categories, suggestions, suggestionStatus]);
+
+  const filteredFaqs = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return faqs
+      .filter((faq) => {
+        const matchesSearch =
+          !query ||
+          faq.question?.toLowerCase().includes(query) ||
+          faq.answer?.toLowerCase().includes(query) ||
+          faq.category?.toLowerCase().includes(query) ||
+          (faq.tags || []).join(" ").toLowerCase().includes(query);
+
+        const matchesCategory =
+          categoryFilter === "all" || faq.category === categoryFilter;
+
+        return matchesSearch && matchesCategory;
+      })
+      .sort((a, b) => {
+        if (sortBy === "usage_asc") {
+          return Number(a.hit_count || 0) - Number(b.hit_count || 0);
+        }
+        if (sortBy === "question_asc") {
+          return (a.question || "").localeCompare(b.question || "", "es");
+        }
+        if (sortBy === "question_desc") {
+          return (b.question || "").localeCompare(a.question || "", "es");
+        }
+        if (sortBy === "category") {
+          return (a.category || "Sin categoría").localeCompare(
+            b.category || "Sin categoría",
+            "es",
+          );
+        }
+        return Number(b.hit_count || 0) - Number(a.hit_count || 0);
+      });
+  }, [faqs, search, categoryFilter, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredFaqs.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * pageSize;
+  const visibleFaqs = filteredFaqs.slice(start, start + pageSize);
 
   const normalizePayload = (values) => ({
     question: values.question.trim(),
     answer: values.answer.trim(),
     category: values.category.trim() || null,
     tags: values.tagsText
-      ? values.tagsText.split(",").map((tag) => tag.trim()).filter(Boolean)
+      ? values.tagsText
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean)
       : [],
   });
 
-  const createFaq = async (e) => {
-    e.preventDefault();
+  const validateForm = (values) => {
+    if (values.question.trim().length < 8) {
+      return "La pregunta debe tener al menos 8 caracteres.";
+    }
+
+    if (values.answer.trim().length < 15) {
+      return "La respuesta debe tener al menos 15 caracteres.";
+    }
+
+    return "";
+  };
+
+  const createFaq = async (event) => {
+    event.preventDefault();
+
+    const validation = validateForm(createForm);
+    if (validation) {
+      setMessage({ type: "error", text: validation });
+      return;
+    }
+
     setSaving(true);
-    setError("");
+    setMessage(null);
 
     try {
-      await faqAPI.create(normalizePayload(form));
-      setForm(initialForm);
-      await loadFaqs();
-    } catch (err) {
-      setError(err.response?.data?.detail || "Error creando FAQ");
+      await faqAPI.create(normalizePayload(createForm));
+      setCreateForm(EMPTY_FORM);
+      setCreateOpen(false);
+      setMessage({ type: "success", text: "FAQ creada correctamente." });
+      await loadFaqs({ quiet: true });
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error.response?.data?.detail || "No fue posible crear la FAQ.",
+      });
     } finally {
       setSaving(false);
     }
   };
 
-  const startEdit = (faq) => {
-    setEditing(faq.id);
+  const startEditFaq = (faq) => {
+    setOpenMenuId("");
+    setEditFaq(faq);
     setEditForm({
-      question: faq.question,
-      answer: faq.answer,
+      question: faq.question || "",
+      answer: faq.answer || "",
       category: faq.category || "",
       tagsText: faq.tags?.join(", ") || "",
     });
   };
 
-  const updateFaq = async (id) => {
+  const updateFaq = async (event) => {
+    event.preventDefault();
+    if (!editFaq) return;
+
+    const validation = validateForm(editForm);
+    if (validation) {
+      setMessage({ type: "error", text: validation });
+      return;
+    }
+
     setSaving(true);
-    setError("");
+    setMessage(null);
 
     try {
-      await faqAPI.update(id, normalizePayload(editForm));
-      setEditing(null);
-      setEditForm(initialForm);
-      await loadFaqs();
-    } catch (err) {
-      setError(err.response?.data?.detail || "Error actualizando FAQ");
+      await faqAPI.update(editFaq.id, normalizePayload(editForm));
+      setEditFaq(null);
+      setEditForm(EMPTY_FORM);
+      setMessage({ type: "success", text: "FAQ actualizada correctamente." });
+      await loadFaqs({ quiet: true });
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error.response?.data?.detail || "No fue posible actualizar la FAQ.",
+      });
     } finally {
       setSaving(false);
     }
   };
 
-  const removeFaq = async (id) => {
-    const ok = window.confirm("¿Seguro que deseas desactivar esta FAQ?");
-    if (!ok) return;
+  const deactivateFaq = async () => {
+    if (!confirmDelete) return;
 
-    setError("");
+    setBusyId(confirmDelete.id);
+    setMessage(null);
 
     try {
-      await faqAPI.remove(id);
-      await loadFaqs();
-    } catch (err) {
-      setError(err.response?.data?.detail || "Error desactivando FAQ");
+      await faqAPI.remove(confirmDelete.id);
+      setConfirmDelete(null);
+      setMessage({ type: "success", text: "FAQ desactivada correctamente." });
+      await loadFaqs({ quiet: true });
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error.response?.data?.detail || "No fue posible desactivar la FAQ.",
+      });
+    } finally {
+      setBusyId("");
     }
   };
 
-  const startEditSuggestion = (item) => {
-    setEditingSuggestion(item.id);
+  const startSuggestionEdit = (item) => {
+    setEditSuggestion(item);
     setSuggestionForm({
-      question: item.question,
-      answer: item.answer,
+      question: item.question || "",
+      answer: item.answer || "",
       category: item.category || "",
       tagsText: item.tags?.join(", ") || "",
     });
   };
 
-  const approveSuggestion = async (item, useEdit = false) => {
-    setSaving(true);
-    setError("");
+  const approveSuggestion = async (item, useEditedValues = false) => {
+    const values = useEditedValues ? suggestionForm : {
+      question: item.question || "",
+      answer: item.answer || "",
+      category: item.category || "",
+      tagsText: item.tags?.join(", ") || "",
+    };
+
+    const validation = validateForm(values);
+    if (validation) {
+      setMessage({ type: "error", text: validation });
+      return;
+    }
+
+    setBusyId(item.id);
+    setMessage(null);
 
     try {
-      const payload = useEdit ? normalizePayload(suggestionForm) : {};
-      await adminAPI.approveWebKnowledge(item.id, { ...payload, create_faq: true });
-      setEditingSuggestion(null);
-      setSuggestionForm(initialForm);
-      await loadFaqs();
-    } catch (err) {
-      setError(err.response?.data?.detail || "Error aprobando sugerencia");
+      const payload = useEditedValues ? normalizePayload(values) : {};
+      await adminAPI.approveWebKnowledge(item.id, {
+        ...payload,
+        create_faq: true,
+      });
+
+      setEditSuggestion(null);
+      setSuggestionForm(EMPTY_FORM);
+      setMessage({
+        type: "success",
+        text: "Sugerencia aprobada y registrada como FAQ oficial.",
+      });
+
+      await Promise.all([
+        loadFaqs({ quiet: true }),
+        loadSuggestions({ quiet: true }),
+      ]);
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text:
+          error.response?.data?.detail ||
+          "No fue posible aprobar la sugerencia.",
+      });
     } finally {
-      setSaving(false);
+      setBusyId("");
     }
   };
 
-  const rejectSuggestion = async (item) => {
-    const reason = window.prompt("Motivo del rechazo (opcional):", "No aplica como FAQ interna");
-    if (reason === null) return;
+  const rejectSuggestion = async () => {
+    if (!rejectItem) return;
 
-    setSaving(true);
-    setError("");
+    setBusyId(rejectItem.id);
+    setMessage(null);
 
     try {
-      await adminAPI.rejectWebKnowledge(item.id, reason);
-      await loadFaqs();
-    } catch (err) {
-      setError(err.response?.data?.detail || "Error rechazando sugerencia");
+      await adminAPI.rejectWebKnowledge(rejectItem.id, rejectReason.trim());
+      setRejectItem(null);
+      setRejectReason("No aplica como FAQ interna");
+      setMessage({ type: "success", text: "Sugerencia rechazada correctamente." });
+      await loadSuggestions({ quiet: true });
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text:
+          error.response?.data?.detail ||
+          "No fue posible rechazar la sugerencia.",
+      });
     } finally {
-      setSaving(false);
+      setBusyId("");
     }
   };
 
-  const filteredFaqs = faqs.filter((faq) => {
-    const q = filter.toLowerCase();
-    return (
-      faq.question.toLowerCase().includes(q) ||
-      faq.answer.toLowerCase().includes(q) ||
-      (faq.category || "").toLowerCase().includes(q) ||
-      (faq.tags || []).join(" ").toLowerCase().includes(q)
-    );
-  });
+  const hasFaqFilters =
+    search || categoryFilter !== "all" || sortBy !== "usage_desc";
+
+  const clearFaqFilters = () => {
+    setSearch("");
+    setCategoryFilter("all");
+    setSortBy("usage_desc");
+  };
 
   return (
     <AppShell currentPage="faqs">
+      <main className="botiq-page-main botiq-faqs-page">
+        <PageHeading
+          onCreate={() => {
+            setCreateForm(EMPTY_FORM);
+            setCreateOpen(true);
+          }}
+          onRefresh={() =>
+            activeTab === "faqs" ? loadFaqs() : loadSuggestions()
+          }
+          refreshing={loading || loadingSuggestions}
+        />
 
-      <main className="botiq-page-main">
-        <header style={{ marginBottom: 24 }}>
-          <h1 style={{ color: CH, fontSize: 24, margin: 0 }}>Gestión de FAQs</h1>
-          <p style={{ color: "var(--botiq-muted)", marginTop: 6, fontSize: 13 }}>
-            Administra FAQs aprobadas y revisa conocimiento sugerido por búsquedas web de BOTIQ.
-          </p>
-        </header>
+        {message && (
+          <Alert
+            type={message.type}
+            text={message.text}
+            onClose={() => setMessage(null)}
+          />
+        )}
 
-        {error && <div style={alertStyle}>⚠️ {error}</div>}
-
-        <section style={cardStyle}>
-          <h2 style={sectionTitle}>Crear FAQ manual</h2>
-
-          <form onSubmit={createFaq} style={{ display: "grid", gap: 12 }}>
-            <Input label="Pregunta" value={form.question} onChange={(v) => setForm({ ...form, question: v })} required />
-            <TextArea label="Respuesta" value={form.answer} onChange={(v) => setForm({ ...form, answer: v })} required />
-
-            <div style={formGrid}>
-              <Input label="Categoría" value={form.category} onChange={(v) => setForm({ ...form, category: v })} />
-              <Input label="Tags separados por coma" value={form.tagsText} onChange={(v) => setForm({ ...form, tagsText: v })} />
-            </div>
-
-            <button type="submit" disabled={saving} style={primaryBtn}>
-              {saving ? "Guardando..." : "Crear FAQ"}
-            </button>
-          </form>
+        <section className="botiq-faqs-kpis" aria-label="Resumen de conocimiento">
+          <MetricCard
+            icon={BookOpenCheck}
+            label="FAQs activas"
+            value={metrics.total}
+            caption={`${metrics.used} con consultas`}
+            tone="primary"
+          />
+          <MetricCard
+            icon={Layers3}
+            label="Categorías"
+            value={metrics.categories}
+            caption="Clasificación disponible"
+            tone="purple"
+          />
+          <MetricCard
+            icon={BarChart3}
+            label="Consultas resueltas"
+            value={metrics.totalHits}
+            caption="Uso acumulado de FAQs"
+            tone="success"
+          />
+          <MetricCard
+            icon={Globe2}
+            label="Sugerencias visibles"
+            value={suggestions.length}
+            caption={`Estado: ${statusLabel(suggestionStatus)}`}
+            tone="warning"
+          />
         </section>
 
-        <section style={cardStyle}>
-          <div style={headerRow}>
+        <section className="botiq-faqs-tabs" aria-label="Secciones de conocimiento">
+          <button
+            type="button"
+            className={activeTab === "faqs" ? "is-active" : ""}
+            onClick={() => setActiveTab("faqs")}
+          >
+            <BookOpenCheck size={18} />
+            FAQs oficiales
+            <span>{faqs.length}</span>
+          </button>
+
+          <button
+            type="button"
+            className={activeTab === "suggestions" ? "is-active" : ""}
+            onClick={() => setActiveTab("suggestions")}
+          >
+            <Sparkles size={18} />
+            Sugerencias web
+            <span>{suggestions.length}</span>
+          </button>
+        </section>
+
+        {activeTab === "faqs" ? (
+          <>
+            <section className="botiq-faqs-toolbar" aria-label="Filtros de FAQs">
+              <div className="botiq-faqs-search">
+                <Search size={18} aria-hidden="true" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar pregunta, respuesta, categoría o etiqueta..."
+                  aria-label="Buscar FAQs"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    aria-label="Limpiar búsqueda"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+
+              <SelectFilter
+                icon={Filter}
+                value={categoryFilter}
+                onChange={setCategoryFilter}
+                options={[
+                  { value: "all", label: "Todas las categorías" },
+                  ...categories.map((category) => ({
+                    value: category,
+                    label: category,
+                  })),
+                ]}
+              />
+
+              <SelectFilter
+                icon={BarChart3}
+                value={sortBy}
+                onChange={setSortBy}
+                options={[
+                  { value: "usage_desc", label: "Más utilizadas" },
+                  { value: "usage_asc", label: "Menos utilizadas" },
+                  { value: "question_asc", label: "Pregunta A–Z" },
+                  { value: "question_desc", label: "Pregunta Z–A" },
+                  { value: "category", label: "Por categoría" },
+                ]}
+              />
+
+              {hasFaqFilters && (
+                <button
+                  type="button"
+                  className="botiq-faqs-clear"
+                  onClick={clearFaqFilters}
+                >
+                  <X size={16} />
+                  Limpiar
+                </button>
+              )}
+            </section>
+
+            <section className="botiq-faqs-panel">
+              <header className="botiq-faqs-panel__header">
+                <div>
+                  <h2>Biblioteca oficial de FAQs</h2>
+                  <p>
+                    Mostrando {visibleFaqs.length} de {filteredFaqs.length} resultados.
+                  </p>
+                </div>
+
+                <label className="botiq-faqs-page-size">
+                  Mostrar
+                  <select
+                    value={pageSize}
+                    onChange={(event) => setPageSize(Number(event.target.value))}
+                  >
+                    {PAGE_SIZE_OPTIONS.map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </header>
+
+              {loading ? (
+                <FaqSkeleton />
+              ) : filteredFaqs.length === 0 ? (
+                <EmptyState
+                  filtered={Boolean(hasFaqFilters)}
+                  onClear={clearFaqFilters}
+                  onCreate={() => setCreateOpen(true)}
+                />
+              ) : (
+                <>
+                  <div className="botiq-faqs-grid">
+                    {visibleFaqs.map((faq) => (
+                      <FaqCard
+                        key={faq.id}
+                        faq={faq}
+                        busy={busyId === faq.id}
+                        menuOpen={openMenuId === faq.id}
+                        onToggleMenu={(event) => {
+                          event.stopPropagation();
+                          setOpenMenuId((current) =>
+                            current === faq.id ? "" : faq.id,
+                          );
+                        }}
+                        onEdit={() => startEditFaq(faq)}
+                        onDeactivate={() => {
+                          setOpenMenuId("");
+                          setConfirmDelete(faq);
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  <Pagination
+                    page={safePage}
+                    totalPages={totalPages}
+                    totalItems={filteredFaqs.length}
+                    pageSize={pageSize}
+                    onPage={setPage}
+                  />
+                </>
+              )}
+            </section>
+          </>
+        ) : (
+          <>
+            <section className="botiq-faqs-toolbar" aria-label="Filtros de sugerencias">
+              <div className="botiq-faqs-search">
+                <Search size={18} aria-hidden="true" />
+                <input
+                  value={suggestionSearch}
+                  onChange={(event) => setSuggestionSearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") loadSuggestions();
+                  }}
+                  placeholder="Buscar sugerencias web..."
+                  aria-label="Buscar sugerencias web"
+                />
+                {suggestionSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setSuggestionSearch("")}
+                    aria-label="Limpiar búsqueda"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+
+              <SelectFilter
+                icon={ShieldCheck}
+                value={suggestionStatus}
+                onChange={setSuggestionStatus}
+                options={SUGGESTION_STATUS}
+              />
+
+              <button
+                type="button"
+                className="botiq-faqs-btn botiq-faqs-btn--secondary"
+                onClick={() => loadSuggestions()}
+                disabled={loadingSuggestions}
+              >
+                <RefreshCw
+                  className={loadingSuggestions ? "spin" : ""}
+                  size={17}
+                />
+                Buscar
+              </button>
+            </section>
+
+            <section className="botiq-faqs-panel">
+              <header className="botiq-faqs-panel__header">
+                <div>
+                  <h2>Conocimiento sugerido por búsquedas web</h2>
+                  <p>
+                    Revisa la calidad, las fuentes y el alcance antes de convertir una
+                    respuesta en conocimiento oficial.
+                  </p>
+                </div>
+
+                <StatusBadge status={suggestionStatus} />
+              </header>
+
+              {loadingSuggestions ? (
+                <FaqSkeleton count={4} />
+              ) : suggestions.length === 0 ? (
+                <SuggestionEmpty status={suggestionStatus} />
+              ) : (
+                <div className="botiq-faqs-suggestions">
+                  {suggestions.map((item) => (
+                    <SuggestionCard
+                      key={item.id}
+                      item={item}
+                      busy={busyId === item.id}
+                      onApprove={() => approveSuggestion(item)}
+                      onEdit={() => startSuggestionEdit(item)}
+                      onReject={() => {
+                        setRejectItem(item);
+                        setRejectReason("No aplica como FAQ interna");
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        <FaqModal
+          open={createOpen}
+          title="Crear nueva FAQ"
+          description="Agrega conocimiento validado a la biblioteca oficial de BOTIQ."
+          onClose={() => !saving && setCreateOpen(false)}
+        >
+          <FaqForm
+            values={createForm}
+            onChange={setCreateForm}
+            onSubmit={createFaq}
+            saving={saving}
+            submitLabel="Crear FAQ"
+            onCancel={() => setCreateOpen(false)}
+          />
+        </FaqModal>
+
+        <FaqModal
+          open={Boolean(editFaq)}
+          title="Editar FAQ"
+          description="Actualiza la pregunta, respuesta y clasificación."
+          onClose={() => !saving && setEditFaq(null)}
+        >
+          <FaqForm
+            values={editForm}
+            onChange={setEditForm}
+            onSubmit={updateFaq}
+            saving={saving}
+            submitLabel="Guardar cambios"
+            onCancel={() => setEditFaq(null)}
+          />
+        </FaqModal>
+
+        <FaqModal
+          open={Boolean(editSuggestion)}
+          title="Editar antes de aprobar"
+          description="Ajusta la redacción y clasificación antes de convertirla en FAQ oficial."
+          onClose={() => !busyId && setEditSuggestion(null)}
+        >
+          <FaqForm
+            values={suggestionForm}
+            onChange={setSuggestionForm}
+            onSubmit={(event) => {
+              event.preventDefault();
+              approveSuggestion(editSuggestion, true);
+            }}
+            saving={Boolean(busyId)}
+            submitLabel="Aprobar como FAQ"
+            onCancel={() => setEditSuggestion(null)}
+            submitIcon={ShieldCheck}
+          />
+        </FaqModal>
+
+        <FaqModal
+          open={Boolean(rejectItem)}
+          title="Rechazar sugerencia"
+          description="Registra el motivo para mantener trazabilidad de la decisión."
+          onClose={() => !busyId && setRejectItem(null)}
+          compact
+        >
+          <form
+            className="botiq-faqs-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              rejectSuggestion();
+            }}
+          >
+            <label className="botiq-faqs-field">
+              <span>Motivo del rechazo</span>
+              <textarea
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+                rows={5}
+                maxLength={500}
+                autoFocus
+              />
+              <small>{rejectReason.length}/500 caracteres</small>
+            </label>
+
+            <div className="botiq-faqs-modal-actions">
+              <button
+                type="button"
+                className="botiq-faqs-btn botiq-faqs-btn--secondary"
+                onClick={() => setRejectItem(null)}
+                disabled={Boolean(busyId)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="botiq-faqs-btn botiq-faqs-btn--danger"
+                disabled={Boolean(busyId)}
+              >
+                {busyId ? (
+                  <RefreshCw className="spin" size={17} />
+                ) : (
+                  <XCircle size={17} />
+                )}
+                {busyId ? "Rechazando..." : "Rechazar sugerencia"}
+              </button>
+            </div>
+          </form>
+        </FaqModal>
+
+        <FaqModal
+          open={Boolean(confirmDelete)}
+          title="Desactivar FAQ"
+          description="La FAQ dejará de estar disponible para responder consultas."
+          onClose={() => !busyId && setConfirmDelete(null)}
+          compact
+        >
+          <div className="botiq-faqs-confirm">
+            <div className="botiq-faqs-confirm__icon">
+              <Trash2 size={27} />
+            </div>
+
             <div>
-              <h2 style={sectionTitle}>Conocimiento web sugerido</h2>
-              <p style={muted}>
-                BOTIQ registra aquí respuestas generadas desde internet. Deben aprobarse antes de ser FAQ oficial.
+              <strong>{confirmDelete?.question}</strong>
+              <p>
+                Esta acción no elimina físicamente el registro. La FAQ quedará
+                desactivada de acuerdo con la funcionalidad actual del backend.
               </p>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <select value={suggestionStatus} onChange={(e) => setSuggestionStatus(e.target.value)} style={inputStyle}>
-                <option value="pending">Pendientes</option>
-                <option value="approved">Aprobadas</option>
-                <option value="rejected">Rechazadas</option>
-              </select>
-              <button type="button" onClick={loadFaqs} style={secondaryBtn}>Actualizar</button>
+
+            <div className="botiq-faqs-modal-actions">
+              <button
+                type="button"
+                className="botiq-faqs-btn botiq-faqs-btn--secondary"
+                onClick={() => setConfirmDelete(null)}
+                disabled={Boolean(busyId)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="botiq-faqs-btn botiq-faqs-btn--danger"
+                onClick={deactivateFaq}
+                disabled={Boolean(busyId)}
+              >
+                {busyId ? (
+                  <RefreshCw className="spin" size={17} />
+                ) : (
+                  <Trash2 size={17} />
+                )}
+                {busyId ? "Desactivando..." : "Desactivar FAQ"}
+              </button>
             </div>
           </div>
-
-          {suggestions.length === 0 ? (
-            <div style={emptyStyle}>No hay sugerencias web en estado {suggestionStatus}.</div>
-          ) : (
-            <div style={{ display: "grid", gap: 12 }}>
-              {suggestions.map((item) => (
-                <article key={item.id} style={suggestionCard}>
-                  {editingSuggestion === item.id ? (
-                    <div style={{ display: "grid", gap: 10 }}>
-                      <Input label="Pregunta" value={suggestionForm.question} onChange={(v) => setSuggestionForm({ ...suggestionForm, question: v })} />
-                      <TextArea label="Respuesta aprobada" value={suggestionForm.answer} onChange={(v) => setSuggestionForm({ ...suggestionForm, answer: v })} rows={7} />
-                      <div style={formGrid}>
-                        <Input label="Categoría" value={suggestionForm.category} onChange={(v) => setSuggestionForm({ ...suggestionForm, category: v })} />
-                        <Input label="Tags separados por coma" value={suggestionForm.tagsText} onChange={(v) => setSuggestionForm({ ...suggestionForm, tagsText: v })} />
-                      </div>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button type="button" disabled={saving} style={primaryBtn} onClick={() => approveSuggestion(item, true)}>
-                          Aprobar como FAQ
-                        </button>
-                        <button type="button" style={secondaryBtn} onClick={() => setEditingSuggestion(null)}>
-                          Cancelar
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={badgeRow}>
-                        <span style={statusBadge(item.status)}>{item.status}</span>
-                        <span style={muted}>{item.category || "Sin categoría"}</span>
-                        <span style={muted}>Uso: {item.usage_count || 0}</span>
-                      </div>
-                      <h3 style={{ margin: "8px 0", color: CH, fontSize: 15 }}>{item.question}</h3>
-                      <p style={{ ...muted, whiteSpace: "pre-wrap", marginBottom: 10 }}>{item.answer}</p>
-
-                      {item.sources?.length > 0 && (
-                        <details style={{ marginBottom: 10 }}>
-                          <summary style={{ cursor: "pointer", color: CH, fontWeight: 700 }}>Fuentes públicas consultadas</summary>
-                          <ul style={{ marginTop: 8 }}>
-                            {item.sources.map((s, idx) => (
-                              <li key={`${item.id}-${idx}`} style={{ fontSize: 12, color: "#4b4b6b" }}>
-                                <strong>{s.title || "Fuente"}</strong>{" "}
-                                {s.link ? <a href={s.link} target="_blank" rel="noreferrer">{s.link}</a> : null}
-                              </li>
-                            ))}
-                          </ul>
-                        </details>
-                      )}
-
-                      {item.status === "pending" && (
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          <button type="button" style={primaryBtn} disabled={saving} onClick={() => approveSuggestion(item)}>
-                            Aprobar directo como FAQ
-                          </button>
-                          <button type="button" style={secondaryBtn} onClick={() => startEditSuggestion(item)}>
-                            Editar antes de aprobar
-                          </button>
-                          <button type="button" style={dangerBtn} disabled={saving} onClick={() => rejectSuggestion(item)}>
-                            Rechazar
-                          </button>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section style={cardStyle}>
-          <div style={headerRow}>
-            <h2 style={sectionTitle}>FAQs aprobadas</h2>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && loadFaqs()}
-                placeholder="Filtrar FAQs y sugerencias..."
-                style={inputStyle}
-              />
-              <button type="button" onClick={loadFaqs} style={secondaryBtn}>Buscar</button>
-            </div>
-          </div>
-
-          {loading ? (
-            <div style={emptyStyle}>Cargando...</div>
-          ) : filteredFaqs.length === 0 ? (
-            <div style={emptyStyle}>No hay FAQs registradas.</div>
-          ) : (
-            <div style={{ display: "grid", gap: 12 }}>
-              {filteredFaqs.map((faq) => (
-                <article key={faq.id} style={faqCard}>
-                  {editing === faq.id ? (
-                    <div style={{ display: "grid", gap: 10 }}>
-                      <Input label="Pregunta" value={editForm.question} onChange={(v) => setEditForm({ ...editForm, question: v })} />
-                      <TextArea label="Respuesta" value={editForm.answer} onChange={(v) => setEditForm({ ...editForm, answer: v })} />
-                      <div style={formGrid}>
-                        <Input label="Categoría" value={editForm.category} onChange={(v) => setEditForm({ ...editForm, category: v })} />
-                        <Input label="Tags separados por coma" value={editForm.tagsText} onChange={(v) => setEditForm({ ...editForm, tagsText: v })} />
-                      </div>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button type="button" disabled={saving} style={primaryBtn} onClick={() => updateFaq(faq.id)}>
-                          Guardar
-                        </button>
-                        <button type="button" style={secondaryBtn} onClick={() => setEditing(null)}>
-                          Cancelar
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={badgeRow}>
-                        {faq.category && <span style={chipStyle}>{faq.category}</span>}
-                        <span style={muted}>{faq.hit_count || 0} usos</span>
-                      </div>
-                      <h3 style={{ margin: "8px 0", color: CH, fontSize: 16 }}>{faq.question}</h3>
-                      <p style={{ color: "#4b4b6b", fontSize: 13, whiteSpace: "pre-wrap" }}>{faq.answer}</p>
-                      {faq.tags?.length > 0 && (
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                          {faq.tags.map((tag) => <span key={tag} style={tagStyle}>{tag}</span>)}
-                        </div>
-                      )}
-                      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                        <button type="button" style={secondaryBtn} onClick={() => startEdit(faq)}>
-                          Editar
-                        </button>
-                        <button type="button" style={dangerBtn} onClick={() => removeFaq(faq.id)}>
-                          Desactivar
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
+        </FaqModal>
       </main>
     </AppShell>
   );
 }
 
-function Input({ label, value, onChange, required = false }) {
+function PageHeading({ onCreate, onRefresh, refreshing }) {
   return (
-    <label style={{ display: "grid", gap: 5, fontSize: 12, color: "#55556f", fontWeight: 700 }}>
-      {label}
-      <input required={required} value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle} />
+    <header className="botiq-faqs-heading">
+      <div className="botiq-faqs-heading__main">
+        <div className="botiq-faqs-heading__icon" aria-hidden="true">
+          <CircleHelp size={27} />
+        </div>
+
+        <div>
+          <span className="botiq-faqs-heading__eyebrow">Conocimiento</span>
+          <h1>Gestión de FAQs</h1>
+          <p>
+            Administra conocimiento oficial y valida respuestas sugeridas por
+            búsquedas web antes de publicarlas.
+          </p>
+        </div>
+      </div>
+
+      <div className="botiq-faqs-heading__actions">
+        <button
+          type="button"
+          className="botiq-faqs-btn botiq-faqs-btn--secondary"
+          onClick={onRefresh}
+          disabled={refreshing}
+        >
+          <RefreshCw className={refreshing ? "spin" : ""} size={17} />
+          Actualizar
+        </button>
+
+        <button
+          type="button"
+          className="botiq-faqs-btn botiq-faqs-btn--primary"
+          onClick={onCreate}
+        >
+          <Plus size={17} />
+          Nueva FAQ
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function MetricCard({ icon: Icon, label, value, caption, tone }) {
+  return (
+    <article className={`botiq-faqs-kpi botiq-faqs-kpi--${tone}`}>
+      <div className="botiq-faqs-kpi__icon">
+        <Icon size={21} />
+      </div>
+      <div>
+        <p>{label}</p>
+        <strong>{value}</strong>
+        <span>{caption}</span>
+      </div>
+    </article>
+  );
+}
+
+function Alert({ type, text, onClose }) {
+  return (
+    <div
+      className={`botiq-faqs-alert botiq-faqs-alert--${type}`}
+      role={type === "error" ? "alert" : "status"}
+    >
+      <span>{type === "success" ? <Check size={16} /> : "!"}</span>
+      <p>{text}</p>
+      <button type="button" onClick={onClose} aria-label="Cerrar mensaje">
+        <X size={16} />
+      </button>
+    </div>
+  );
+}
+
+function SelectFilter({ icon: Icon, value, onChange, options }) {
+  return (
+    <label className="botiq-faqs-select">
+      <Icon size={16} aria-hidden="true" />
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown size={15} aria-hidden="true" />
     </label>
   );
 }
 
-function TextArea({ label, value, onChange, required = false, rows = 5 }) {
+function FaqCard({
+  faq,
+  busy,
+  menuOpen,
+  onToggleMenu,
+  onEdit,
+  onDeactivate,
+}) {
+  const tags = faq.tags || [];
+
   return (
-    <label style={{ display: "grid", gap: 5, fontSize: 12, color: "#55556f", fontWeight: 700 }}>
-      {label}
-      <textarea required={required} value={value} onChange={(e) => onChange(e.target.value)} rows={rows} style={{ ...inputStyle, resize: "vertical" }} />
+    <article className="botiq-faq-card">
+      <header>
+        <div className="botiq-faq-card__badges">
+          <span className="botiq-faq-category">
+            <Layers3 size={13} />
+            {faq.category || "Sin categoría"}
+          </span>
+          <span className="botiq-faq-usage">
+            <BarChart3 size={13} />
+            {faq.hit_count || 0} usos
+          </span>
+        </div>
+
+        <div className="botiq-faqs-menu-wrap">
+          <button
+            type="button"
+            className="botiq-faqs-icon-btn"
+            onClick={onToggleMenu}
+            aria-label={`Acciones para ${faq.question}`}
+            aria-expanded={menuOpen}
+            disabled={busy}
+          >
+            <MoreHorizontal size={18} />
+          </button>
+
+          {menuOpen && (
+            <div
+              className="botiq-faqs-menu"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button type="button" onClick={onEdit}>
+                <Edit3 size={16} />
+                Editar FAQ
+              </button>
+              <button type="button" className="is-danger" onClick={onDeactivate}>
+                <Trash2 size={16} />
+                Desactivar
+              </button>
+            </div>
+          )}
+        </div>
+      </header>
+
+      <div className="botiq-faq-card__content">
+        <h3>{faq.question}</h3>
+        <p>{faq.answer}</p>
+      </div>
+
+      <footer>
+        <div className="botiq-faq-tags">
+          {tags.length > 0 ? (
+            tags.slice(0, 5).map((tag) => (
+              <span key={tag}>
+                <Hash size={11} />
+                {tag}
+              </span>
+            ))
+          ) : (
+            <span className="is-empty">
+              <Tag size={12} />
+              Sin etiquetas
+            </span>
+          )}
+
+          {tags.length > 5 && <span>+{tags.length - 5}</span>}
+        </div>
+
+        <button type="button" className="botiq-faq-card__edit" onClick={onEdit}>
+          <Edit3 size={14} />
+          Editar
+        </button>
+      </footer>
+    </article>
+  );
+}
+
+function SuggestionCard({ item, busy, onApprove, onEdit, onReject }) {
+  return (
+    <article className="botiq-suggestion-card">
+      <header>
+        <div className="botiq-suggestion-card__meta">
+          <StatusBadge status={item.status} />
+          <span>
+            <Layers3 size={13} />
+            {item.category || "Sin categoría"}
+          </span>
+          <span>
+            <BarChart3 size={13} />
+            {item.usage_count || 0} usos
+          </span>
+        </div>
+
+        {item.confidence != null && (
+          <span className="botiq-suggestion-confidence">
+            Confianza {Math.round(Number(item.confidence) * 100)}%
+          </span>
+        )}
+      </header>
+
+      <div className="botiq-suggestion-card__content">
+        <h3>{item.question}</h3>
+        <p>{item.answer}</p>
+      </div>
+
+      {item.sources?.length > 0 && (
+        <details className="botiq-suggestion-sources">
+          <summary>
+            <Globe2 size={15} />
+            Fuentes públicas consultadas
+            <span>{item.sources.length}</span>
+          </summary>
+
+          <ul>
+            {item.sources.map((source, index) => (
+              <li key={`${item.id}-${index}`}>
+                <div>
+                  <strong>{source.title || "Fuente pública"}</strong>
+                  {source.snippet && <p>{source.snippet}</p>}
+                </div>
+                {source.link && (
+                  <a
+                    href={source.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Abrir ${source.title || "fuente pública"}`}
+                  >
+                    <ExternalLink size={15} />
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {item.status === "pending" && (
+        <footer>
+          <button
+            type="button"
+            className="botiq-faqs-btn botiq-faqs-btn--primary"
+            onClick={onApprove}
+            disabled={busy}
+          >
+            {busy ? (
+              <RefreshCw className="spin" size={16} />
+            ) : (
+              <ShieldCheck size={16} />
+            )}
+            Aprobar como FAQ
+          </button>
+
+          <button
+            type="button"
+            className="botiq-faqs-btn botiq-faqs-btn--secondary"
+            onClick={onEdit}
+            disabled={busy}
+          >
+            <Edit3 size={16} />
+            Editar primero
+          </button>
+
+          <button
+            type="button"
+            className="botiq-faqs-btn botiq-faqs-btn--danger-soft"
+            onClick={onReject}
+            disabled={busy}
+          >
+            <XCircle size={16} />
+            Rechazar
+          </button>
+        </footer>
+      )}
+    </article>
+  );
+}
+
+function FaqForm({
+  values,
+  onChange,
+  onSubmit,
+  saving,
+  submitLabel,
+  onCancel,
+  submitIcon: SubmitIcon = Check,
+}) {
+  const tags = values.tagsText
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+
+  return (
+    <form className="botiq-faqs-form" onSubmit={onSubmit}>
+      <Field
+        label="Pregunta"
+        required
+        hint={`${values.question.length}/500 caracteres`}
+      >
+        <input
+          value={values.question}
+          onChange={(event) =>
+            onChange({ ...values, question: event.target.value })
+          }
+          placeholder="Ej. ¿Cómo puedo restablecer mi contraseña?"
+          minLength={8}
+          maxLength={500}
+          autoFocus
+          required
+        />
+      </Field>
+
+      <Field
+        label="Respuesta"
+        required
+        hint={`${values.answer.length} caracteres`}
+      >
+        <textarea
+          value={values.answer}
+          onChange={(event) =>
+            onChange({ ...values, answer: event.target.value })
+          }
+          placeholder="Escribe una respuesta clara, precisa y verificable..."
+          rows={8}
+          minLength={15}
+          required
+        />
+      </Field>
+
+      <div className="botiq-faqs-form-grid">
+        <Field label="Categoría">
+          <input
+            value={values.category}
+            onChange={(event) =>
+              onChange({ ...values, category: event.target.value })
+            }
+            placeholder="Ej. Accesos"
+            maxLength={100}
+          />
+        </Field>
+
+        <Field label="Etiquetas" hint="Sepáralas con comas">
+          <input
+            value={values.tagsText}
+            onChange={(event) =>
+              onChange({ ...values, tagsText: event.target.value })
+            }
+            placeholder="contraseña, acceso, seguridad"
+          />
+        </Field>
+      </div>
+
+      {tags.length > 0 && (
+        <div className="botiq-faqs-tag-preview">
+          <span>Vista previa:</span>
+          <div>
+            {tags.slice(0, 8).map((tag) => (
+              <i key={tag}>
+                <Hash size={11} />
+                {tag}
+              </i>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="botiq-faqs-form-quality">
+        <QualityCheck
+          ok={values.question.trim().length >= 8}
+          label="Pregunta suficientemente descriptiva"
+        />
+        <QualityCheck
+          ok={values.answer.trim().length >= 15}
+          label="Respuesta con contenido mínimo"
+        />
+        <QualityCheck
+          ok={Boolean(values.category.trim())}
+          label="Categoría asignada"
+          optional
+        />
+      </div>
+
+      <div className="botiq-faqs-modal-actions">
+        <button
+          type="button"
+          className="botiq-faqs-btn botiq-faqs-btn--secondary"
+          onClick={onCancel}
+          disabled={saving}
+        >
+          Cancelar
+        </button>
+
+        <button
+          type="submit"
+          className="botiq-faqs-btn botiq-faqs-btn--primary"
+          disabled={saving}
+        >
+          {saving ? (
+            <RefreshCw className="spin" size={17} />
+          ) : (
+            <SubmitIcon size={17} />
+          )}
+          {saving ? "Guardando..." : submitLabel}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function Field({ label, hint, required, children }) {
+  return (
+    <label className="botiq-faqs-field">
+      <span>
+        {label}
+        {required && <b aria-hidden="true"> *</b>}
+      </span>
+      {children}
+      {hint && <small>{hint}</small>}
     </label>
   );
 }
 
-const cardStyle = {
-  background: "var(--botiq-card-bg)",
-  borderRadius: 18,
-  padding: 20,
-  boxShadow: "0 18px 40px rgba(39,33,99,.08)",
-  border: "1px solid #ecebfa",
-  marginBottom: 18,
-};
+function QualityCheck({ ok, label, optional = false }) {
+  return (
+    <span className={ok ? "is-ok" : optional ? "is-optional" : ""}>
+      {ok ? <Check size={13} /> : optional ? "○" : "•"}
+      {label}
+      {optional && !ok && <em>Opcional</em>}
+    </span>
+  );
+}
 
-const sectionTitle = { color: CH, fontSize: 18, margin: 0 };
-const muted = { color: "var(--botiq-muted)", fontSize: 13, margin: 0 };
-const alertStyle = { background: "#fff1f1", color: "#b42318", border: "1px solid #ffcaca", padding: 12, borderRadius: 12, marginBottom: 16 };
-const headerRow = { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 14 };
-const formGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 };
-const inputStyle = { border: "1px solid #d8d7ea", borderRadius: 10, padding: "10px 12px", outline: "none", fontSize: 13, minWidth: 180 };
-const primaryBtn = { background: C, color: "#fff", border: 0, borderRadius: 10, padding: "10px 14px", fontWeight: 800, cursor: "pointer" };
-const secondaryBtn = { background: "#f4f3ff", color: CH, border: "1px solid #d9d6ff", borderRadius: 10, padding: "10px 14px", fontWeight: 800, cursor: "pointer" };
-const dangerBtn = { background: "#fff1f1", color: "#b42318", border: "1px solid #ffcaca", borderRadius: 10, padding: "10px 14px", fontWeight: 800, cursor: "pointer" };
-const emptyStyle = { padding: 18, borderRadius: 12, background: "#f7f7fc", color: "var(--botiq-muted)", fontSize: 13 };
-const faqCard = { border: "1px solid #eeedf8", borderRadius: 14, padding: 14, background: "var(--botiq-card-bg)" };
-const suggestionCard = { border: "1px solid #f1dfb8", borderRadius: 14, padding: 14, background: "#fffaf0" };
-const badgeRow = { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" };
-const chipStyle = { background: "#f4f3ff", color: CH, fontWeight: 800, fontSize: 11, padding: "5px 8px", borderRadius: 999 };
-const tagStyle = { background: "#f8f8fc", color: "#5c5b75", fontSize: 11, padding: "4px 8px", borderRadius: 999 };
-const statusBadge = (status) => ({
-  background: status === "approved" ? "#e8fff1" : status === "rejected" ? "#fff1f1" : "#fff4d6",
-  color: status === "approved" ? "#067647" : status === "rejected" ? "#b42318" : "#9a6700",
-  fontWeight: 900,
-  fontSize: 11,
-  padding: "5px 8px",
-  borderRadius: 999,
-});
+function StatusBadge({ status }) {
+  return (
+    <span className={`botiq-suggestion-status status-${status}`}>
+      <i />
+      {statusLabel(status)}
+    </span>
+  );
+}
+
+function statusLabel(status) {
+  return (
+    SUGGESTION_STATUS.find((item) => item.value === status)?.label ||
+    status ||
+    "Sin estado"
+  );
+}
+
+function Pagination({ page, totalPages, totalItems, pageSize, onPage }) {
+  const from = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, totalItems);
+
+  return (
+    <footer className="botiq-faqs-pagination">
+      <p>
+        Mostrando {from}–{to} de {totalItems}
+      </p>
+
+      <div>
+        <button
+          type="button"
+          className="botiq-faqs-icon-btn"
+          onClick={() => onPage(Math.max(1, page - 1))}
+          disabled={page <= 1}
+          aria-label="Página anterior"
+        >
+          <ChevronLeft size={18} />
+        </button>
+
+        <span>
+          Página {page} de {totalPages}
+        </span>
+
+        <button
+          type="button"
+          className="botiq-faqs-icon-btn"
+          onClick={() => onPage(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+          aria-label="Página siguiente"
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
+    </footer>
+  );
+}
+
+function EmptyState({ filtered, onClear, onCreate }) {
+  return (
+    <div className="botiq-faqs-empty">
+      <div>
+        <FileSearch size={31} />
+      </div>
+      <h3>
+        {filtered ? "No encontramos coincidencias" : "No hay FAQs registradas"}
+      </h3>
+      <p>
+        {filtered
+          ? "Ajusta la búsqueda o limpia los filtros para consultar toda la biblioteca."
+          : "Crea la primera FAQ para comenzar a construir la base de conocimiento oficial."}
+      </p>
+      <button
+        type="button"
+        className="botiq-faqs-btn botiq-faqs-btn--primary"
+        onClick={filtered ? onClear : onCreate}
+      >
+        {filtered ? <X size={17} /> : <Plus size={17} />}
+        {filtered ? "Limpiar filtros" : "Crear FAQ"}
+      </button>
+    </div>
+  );
+}
+
+function SuggestionEmpty({ status }) {
+  return (
+    <div className="botiq-faqs-empty">
+      <div>
+        <Sparkles size={31} />
+      </div>
+      <h3>No hay sugerencias {statusLabel(status).toLowerCase()}</h3>
+      <p>
+        Las respuestas obtenidas mediante búsqueda web aparecerán aquí para que
+        un administrador pueda revisarlas.
+      </p>
+    </div>
+  );
+}
+
+function FaqSkeleton({ count = 6 }) {
+  return (
+    <div className="botiq-faqs-skeleton" aria-label="Cargando contenido">
+      {Array.from({ length: count }).map((_, index) => (
+        <div key={index}>
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FaqModal({
+  open,
+  title,
+  description,
+  children,
+  onClose,
+  compact = false,
+}) {
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="botiq-faqs-modal-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+      role="presentation"
+    >
+      <section
+        className={`botiq-faqs-modal${compact ? " is-compact" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="botiq-faqs-modal-title"
+      >
+        <header>
+          <div>
+            <h2 id="botiq-faqs-modal-title">{title}</h2>
+            {description && <p>{description}</p>}
+          </div>
+
+          <button
+            type="button"
+            className="botiq-faqs-icon-btn"
+            onClick={onClose}
+            aria-label="Cerrar"
+          >
+            <X size={19} />
+          </button>
+        </header>
+
+        <div className="botiq-faqs-modal__body">{children}</div>
+      </section>
+    </div>
+  );
+}

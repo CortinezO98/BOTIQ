@@ -1,0 +1,151 @@
+/* ==========================================================================
+   BOTIQ — CORRECCIÓN DEFINITIVA DE LA BARRA DE BÚSQUEDA USUARIOS
+   Elimina la "tarjeta exterior" para evitar el efecto de campo sobre campo.
+   Debe quedar AL FINAL de users.css.
+   ========================================================================== */
+
+.botiq-users-page .botiq-users-toolbar {
+  display: grid !important;
+  grid-template-columns: minmax(280px, 1fr) auto auto auto auto auto !important;
+  align-items: center !important;
+  gap: 12px !important;
+
+  padding: 0 !important;
+  margin-bottom: 18px !important;
+
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Cada control conserva su propia superficie */
+.botiq-users-page .botiq-users-search {
+  width: 100%;
+  min-width: 0;
+  min-height: 50px;
+  padding: 0 14px;
+
+  background: var(--clay-surface, var(--users-surface)) !important;
+  border: 1px solid var(--clay-border, var(--users-border)) !important;
+  border-radius: 16px !important;
+  box-shadow: var(--clay-raised-sm, var(--botiq-shadow)) !important;
+  overflow: hidden;
+}
+
+.botiq-users-page .botiq-users-search input,
+.botiq-users-page .botiq-users-search input:hover,
+.botiq-users-page .botiq-users-search input:focus,
+.botiq-users-page .botiq-users-search input:active {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 46px !important;
+  height: 46px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  outline: 0 !important;
+
+  box-shadow: none !important;
+  -webkit-box-shadow: none !important;
+  filter: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+}
+
+.botiq-users-page .botiq-users-select-filter {
+  min-width: 155px;
+  min-height: 50px;
+  padding: 0 12px;
+
+  background: var(--clay-surface, var(--users-surface)) !important;
+  border: 1px solid var(--clay-border, var(--users-border)) !important;
+  border-radius: 16px !important;
+  box-shadow: var(--clay-raised-sm, var(--botiq-shadow)) !important;
+}
+
+.botiq-users-page .botiq-users-select-filter select,
+.botiq-users-page .botiq-users-select-filter select:hover,
+.botiq-users-page .botiq-users-select-filter select:focus,
+.botiq-users-page .botiq-users-select-filter select:active {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 46px !important;
+  height: 46px !important;
+  margin: 0 !important;
+  padding: 0 26px 0 3px !important;
+
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  outline: 0 !important;
+
+  box-shadow: none !important;
+  -webkit-box-shadow: none !important;
+  filter: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+}
+
+.botiq-users-page .botiq-users-search::before,
+.botiq-users-page .botiq-users-search::after,
+.botiq-users-page .botiq-users-select-filter::before,
+.botiq-users-page .botiq-users-select-filter::after {
+  content: none !important;
+  display: none !important;
+}
+
+@media (max-width: 1250px) {
+  .botiq-users-page .botiq-users-toolbar {
+    grid-template-columns: minmax(260px, 1fr) repeat(3, auto) !important;
+  }
+
+  .botiq-users-page .botiq-users-select-filter:nth-of-type(4) {
+    grid-column: auto;
+  }
+
+  .botiq-users-page .botiq-users-clear {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 900px) {
+  .botiq-users-page .botiq-users-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .botiq-users-page .botiq-users-search {
+    grid-column: 1 / -1;
+  }
+
+  .botiq-users-page .botiq-users-select-filter {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .botiq-users-page .botiq-users-toolbar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .botiq-users-page .botiq-users-search,
+  .botiq-users-page .botiq-users-select-filter {
+    width: 100%;
+    min-width: 0;
+    grid-column: auto;
+  }
+}

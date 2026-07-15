@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { ToastProvider } from "./components/UI/ToastProvider";
 
 import ChatWidget from "./components/ChatWidget";
 import ChatPage from "./pages/ChatPage";
@@ -65,9 +66,11 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <SidebarProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
+          <ToastProvider>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </ToastProvider>
         </SidebarProvider>
       </AuthProvider>
     </ThemeProvider>
