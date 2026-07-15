@@ -11,16 +11,35 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [show, setShow] = useState(false);
-  const { login, loading, error } = useAuth();
+  const [mfaChallengeToken, setMfaChallengeToken] = useState(null);
+  const [mfaCode, setMfaCode] = useState("");
+  const { login, verifyMfa, loading, error } = useAuth();
   const nav = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     try {
-      const user = await login(email.trim(), pass);
+      const result = await login(email.trim(), pass);
+      if (result.mfaRequired) {
+        setMfaChallengeToken(result.mfaChallengeToken);
+        return;
+      }
+      nav(result.user.role === "admin" ? "/dashboard" : "/chat");
+    } catch {
+      // El error ya queda expuesto vía el hook (useAuth().error) y se
+      // muestra abajo del formulario.
+    }
+  };
+
+  const handleMfaSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const user = await verifyMfa(mfaChallengeToken, mfaCode.trim());
       nav(user.role === "admin" ? "/dashboard" : "/chat");
-    } catch {}
+    } catch {
+      // El error ya queda expuesto vía el hook.
+    }
   };
 
   return (
@@ -131,109 +150,205 @@ export default function LoginPage() {
             backdropFilter: "blur(12px)",
           }}
         >
-          <div style={{ textAlign: "center", marginBottom: 30 }}>
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-              <BotiqAvatar size={72} online />
-            </div>
+          {mfaChallengeToken ? (
+            <>
+              <div style={{ textAlign: "center", marginBottom: 30 }}>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                  <BotiqAvatar size={72} online />
+                </div>
 
-            <h2 style={{ margin: 0, color: C, fontSize: 25, fontWeight: 850, letterSpacing: "-0.6px" }}>
-              Iniciar sesión
-            </h2>
+                <h2 style={{ margin: 0, color: C, fontSize: 25, fontWeight: 850, letterSpacing: "-0.6px" }}>
+                  Verificación en dos pasos
+                </h2>
 
-            <p style={{ marginTop: 7, color: "#6b6b8a", fontSize: 13 }}>
-              Accede con tu cuenta corporativa.
-            </p>
-          </div>
+                <p style={{ marginTop: 7, color: "#6b6b8a", fontSize: 13 }}>
+                  Ingresa el código de 6 dígitos de tu app de autenticación.
+                </p>
+              </div>
 
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>Email corporativo</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                placeholder="usuario@empresa.com"
-                style={inputStyle}
-                onFocus={focusInput}
-                onBlur={blurInput}
-              />
-            </div>
+              <form onSubmit={handleMfaSubmit}>
+                <div style={{ marginBottom: 18 }}>
+                  <label style={labelStyle}>Código de verificación</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+                    required
+                    autoFocus
+                    placeholder="000000"
+                    style={{ ...inputStyle, textAlign: "center", fontSize: 22, letterSpacing: 8, fontWeight: 700 }}
+                    onFocus={focusInput}
+                    onBlur={blurInput}
+                  />
+                </div>
 
-            <div style={{ marginBottom: 18 }}>
-              <label style={labelStyle}>Contraseña</label>
-              <div style={{ position: "relative" }}>
-                <input
-                  type={show ? "text" : "password"}
-                  value={pass}
-                  onChange={(e) => setPass(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  placeholder="Tu contraseña"
-                  style={{ ...inputStyle, paddingRight: 48 }}
-                  onFocus={focusInput}
-                  onBlur={blurInput}
-                />
+                {error && (
+                  <div
+                    className="animate__animated animate__shakeX"
+                    style={{
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      color: "#991b1b",
+                      borderRadius: 10,
+                      padding: "10px 12px",
+                      fontSize: 13,
+                      marginBottom: 16,
+                    }}
+                  >
+                    ⚠️ {error}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading || mfaCode.length !== 6}
+                  style={{
+                    width: "100%",
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "13px 16px",
+                    background: loading || mfaCode.length !== 6 ? "#9ca3af" : `linear-gradient(135deg, ${C}, ${CL})`,
+                    color: "#fff",
+                    fontWeight: 750,
+                    fontSize: 15,
+                    cursor: loading || mfaCode.length !== 6 ? "not-allowed" : "pointer",
+                    boxShadow: loading || mfaCode.length !== 6 ? "none" : `0 8px 22px ${C}3d`,
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  {loading ? "Verificando..." : "Verificar →"}
+                </button>
 
                 <button
                   type="button"
-                  onClick={() => setShow((value) => !value)}
-                  style={{
-                    position: "absolute",
-                    right: 12,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background: "transparent",
-                    border: "none",
-                    color: "#6b6b8a",
-                    cursor: "pointer",
-                    fontSize: 16,
+                  onClick={() => {
+                    setMfaChallengeToken(null);
+                    setMfaCode("");
                   }}
-                  title={show ? "Ocultar contraseña" : "Ver contraseña"}
+                  style={{
+                    width: "100%",
+                    border: "none",
+                    background: "transparent",
+                    color: "#6b6b8a",
+                    fontSize: 13,
+                    marginTop: 14,
+                    cursor: "pointer",
+                  }}
                 >
-                  {show ? "🙈" : "👁️"}
+                  ← Volver a intentar con otra cuenta
                 </button>
-              </div>
-            </div>
+              </form>
+            </>
+          ) : (
+            <>
+              <div style={{ textAlign: "center", marginBottom: 30 }}>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                  <BotiqAvatar size={72} online />
+                </div>
 
-            {error && (
-              <div
-                className="animate__animated animate__shakeX"
-                style={{
-                  background: "#fef2f2",
-                  border: "1px solid #fecaca",
-                  color: "#991b1b",
-                  borderRadius: 10,
-                  padding: "10px 12px",
-                  fontSize: 13,
-                  marginBottom: 16,
-                }}
-              >
-                ⚠️ {error}
-              </div>
-            )}
+                <h2 style={{ margin: 0, color: C, fontSize: 25, fontWeight: 850, letterSpacing: "-0.6px" }}>
+                  Iniciar sesión
+                </h2>
 
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                width: "100%",
-                border: "none",
-                borderRadius: 12,
-                padding: "13px 16px",
-                background: loading ? "#9ca3af" : `linear-gradient(135deg, ${C}, ${CL})`,
-                color: "#fff",
-                fontWeight: 750,
-                fontSize: 15,
-                cursor: loading ? "not-allowed" : "pointer",
-                boxShadow: loading ? "none" : `0 8px 22px ${C}3d`,
-                transition: "all 0.2s ease",
-              }}
-            >
-              {loading ? "Ingresando..." : "Ingresar a BOTIQ →"}
-            </button>
-          </form>
+                <p style={{ marginTop: 7, color: "#6b6b8a", fontSize: 13 }}>
+                  Accede con tu cuenta corporativa.
+                </p>
+              </div>
+
+              <form onSubmit={handleSubmit}>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={labelStyle}>Email corporativo</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                    placeholder="usuario@empresa.com"
+                    style={inputStyle}
+                    onFocus={focusInput}
+                    onBlur={blurInput}
+                  />
+                </div>
+
+                <div style={{ marginBottom: 18 }}>
+                  <label style={labelStyle}>Contraseña</label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type={show ? "text" : "password"}
+                      value={pass}
+                      onChange={(e) => setPass(e.target.value)}
+                      required
+                      autoComplete="current-password"
+                      placeholder="Tu contraseña"
+                      style={{ ...inputStyle, paddingRight: 48 }}
+                      onFocus={focusInput}
+                      onBlur={blurInput}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => setShow((value) => !value)}
+                      style={{
+                        position: "absolute",
+                        right: 12,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        background: "transparent",
+                        border: "none",
+                        color: "#6b6b8a",
+                        cursor: "pointer",
+                        fontSize: 16,
+                      }}
+                      title={show ? "Ocultar contraseña" : "Ver contraseña"}
+                    >
+                      {show ? "🙈" : "👁️"}
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <div
+                    className="animate__animated animate__shakeX"
+                    style={{
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      color: "#991b1b",
+                      borderRadius: 10,
+                      padding: "10px 12px",
+                      fontSize: 13,
+                      marginBottom: 16,
+                    }}
+                  >
+                    ⚠️ {error}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    width: "100%",
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "13px 16px",
+                    background: loading ? "#9ca3af" : `linear-gradient(135deg, ${C}, ${CL})`,
+                    color: "#fff",
+                    fontWeight: 750,
+                    fontSize: 15,
+                    cursor: loading ? "not-allowed" : "pointer",
+                    boxShadow: loading ? "none" : `0 8px 22px ${C}3d`,
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  {loading ? "Ingresando..." : "Ingresar a BOTIQ →"}
+                </button>
+              </form>
+            </>
+          )}
 
           <p style={{ textAlign: "center", color: "#9ca3af", fontSize: 11, marginTop: 24 }}>
             IQ Corporation · Powered by Vertex AI
@@ -288,7 +403,3 @@ function blurInput(e) {
   e.target.style.boxShadow = "none";
   e.target.style.background = "#fafafa";
 }
-
-
-
-

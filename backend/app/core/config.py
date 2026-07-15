@@ -11,7 +11,7 @@ _DEV_SECRET_KEY = "dev-secret-change-in-production-32chars!!"
 
 class Settings(BaseSettings):
     APP_NAME: str = "BOTIQ"
-    APP_VERSION: str = "1.7.0"
+    APP_VERSION: str = "1.9.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_COOKIE_NAME: str = "botiq_access_token"
     REFRESH_TOKEN_COOKIE_NAME: str = "botiq_refresh_token"
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+
+    # ── MFA (TOTP) ───────────────────────────────────────────────────────
+    # Opt-in por ahora (no forzado): cada admin decide activarlo desde su
+    # cuenta. MFA_CHALLENGE_TOKEN_EXPIRE_MINUTES es la ventana para completar
+    # /auth/mfa/verify después de un login con password correcto.
+    MFA_ISSUER_NAME: str = "BOTIQ"
+    MFA_CHALLENGE_TOKEN_EXPIRE_MINUTES: int = 5
+    MFA_VERIFY_RATE_LIMIT: str = "5/minute"
 
     GCP_PROJECT_ID: str = ""
     GCP_LOCATION: str = "us-central1"

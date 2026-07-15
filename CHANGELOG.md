@@ -6,6 +6,73 @@ Versionamiento basado en [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.10.0] — 2026-07-15
+
+MFA (TOTP) para rol admin — frontend completo (QR de enrolamiento, código en login, panel de Seguridad). Cierra el ítem "MFA para admin" del backlog de seguridad de la auditoría.
+
+### Agregado
+- **`pages/SecurityPage.jsx`** (`/dashboard/security`, nuevo link "🔒 Seguridad" en el navbar de admin): enrolar MFA con QR + código manual, confirmar activación, desactivar (pide password + código).
+- **`LoginPage.jsx`**: segundo paso de verificación cuando el backend devuelve `mfa_required` — input de código de 6 dígitos, sin tocar el diseño existente del formulario de email/contraseña.
+- `authAPI` en `services/api.js`: `mfaVerify`, `mfaSetup`, `mfaConfirm`, `mfaDisable`.
+- `useAuth()`: nuevo método `verifyMfa(challengeToken, code)` para completar el login en dos pasos.
+- **`hooks/useAuth.test.jsx`**: test de regresión para el bug de estado desincronizado (ver Corregido) — confirma que `login()` en un componente se refleja de inmediato en otro componente que también usa `useAuth()`.
+
+### Corregido
+- **Bug crítico, afectaba a todos los usuarios, no solo MFA**: `App.jsx` seguía leyendo `localStorage.getItem("botiq_user")` directamente en el componente `Guard`, en vez de usar `useAuth()`. Desde la migración a cookies httpOnly (1.6.0), nada volvía a escribir esa clave en `localStorage` — cualquier sesión nueva (o cualquier navegador/perfil sin caché vieja) quedaba en loop de redirect a `/login`, aunque el backend diera cookies de sesión válidas. Es probable que este bug ya estuviera activo en producción desde 1.6.0 y las verificaciones anteriores solo "funcionaran" por una entrada de `localStorage` vieja, previa a esa migración, que nunca se limpió.
+- **`useAuth()` no compartía estado entre componentes**: `Navbar`, `ChatPage` y `LoginPage` llamaban `useAuth()` cada uno por separado, cada uno con su propio `useState` interno — un `login()` hecho desde `LoginPage` no lo veían los demás. Convertido a `AuthProvider` + Context (`hooks/useAuth.jsx`, antes `.js`): una sola fuente de verdad de sesión para toda la app.
+- `hooks/useAuth.js` renombrado a `useAuth.jsx`: el archivo ahora devuelve JSX (`<AuthContext.Provider>`) y con extensión `.js` Vite no lo parsea correctamente.
+
+### Notas de auditoría
+- MFA sigue siendo opt-in (backend, ver 1.9.0). El frontend no fuerza el enrolamiento — cada admin lo activa desde Seguridad cuando quiera.
+- Los dos bugs de sesión corregidos acá (`Guard` con `localStorage` muerto, `useAuth` sin Context) no eran parte del alcance original de "MFA frontend" — aparecieron al revisar `App.jsx`/`Navbar.jsx` antes de agregar la pantalla de Seguridad. Vale la pena una revisión manual del resto del frontend en busca de patrones similares (componentes que asumen datos que ya no existen tras alguna migración anterior).
+
+---
+
+## [1.9.0] — 2026-07-15
+
+MFA (TOTP) para rol admin — backend completo. Opt-in por ahora, cada admin lo activa desde su cuenta.
+
+### Agregado
+- **Tabla `users` extendida** (migración `20260715_0009`): `mfa_enabled`, `mfa_secret_encrypted` (nunca en texto plano — cifrado con Fernet derivado de `SECRET_KEY`), `mfa_enrolled_at`.
+- **`app/core/mfa.py`**: cifrado/descifrado del secreto TOTP, generación de secreto + QR (`pyotp` + `qrcode[pil]`), verificación de códigos de 6 dígitos con tolerancia de reloj de ±30s.
+- **Enrolamiento en dos pasos**: `POST /auth/mfa/setup` (genera secreto + QR, no activa MFA todavía) → `POST /auth/mfa/confirm` (requiere un código válido para recién ahí activarlo). Evita quedar en un estado "medio configurado" si el usuario nunca llega a escanear el QR.
+- **Login con desafío**: si el usuario tiene MFA activo, `POST /auth/login` ya no entrega sesión directamente — devuelve `{mfa_required: true, mfa_challenge_token}` (token de 5 min, sin cookies de sesión). `POST /auth/mfa/verify` con el código completa el login real.
+- **`POST /auth/mfa/disable`**: requiere password Y código TOTP vigente (ninguno de los dos solos alcanza).
+- `REGISTRATION_ALLOWED_EMAIL_DOMAINS`... *(ya existía, sin cambios)*.
+- **5 tests de integración** (`tests/integration/test_mfa_flow.py`), validados contra Postgres real con códigos TOTP generados de verdad (no mockeados): enrolamiento completo, código incorrecto rechazado, disable con ambos factores, y una regresión de seguridad específica (ver Corregido).
+- `pytest-env` agregado a `requirements.txt`: la sección `env =` de `pytest.ini` existía desde antes pero nunca se aplicaba (plugin ausente) — los tests corrían con la configuración real del contenedor en vez de la de test. Ahora `RATE_LIMIT_ENABLED=false` y el resto de esa sección se aplican de verdad.
+
+### Corregido
+- **Bug de seguridad real, no hipotético**: el token de desafío MFA (emitido tras password correcto, antes de pedir el segundo factor) podía usarse directamente como `Authorization: Bearer` en cualquier endpoint protegido — es decir, alguien con solo la contraseña se saltaba el segundo factor por completo. `decode_token()` ahora rechaza explícitamente cualquier token con `purpose=mfa_challenge`. No afecta sesiones ya emitidas (esas no llevan ese claim). Encontrado por un test escrito específicamente para esta regresión de diseño, no detectado durante el desarrollo inicial.
+
+### Notas de auditoría
+- MFA queda **opt-in**, no forzado: cada admin decide activarlo desde su cuenta. Si se quiere volver obligatorio para el rol admin más adelante, hace falta un flag de configuración adicional y una pantalla de "enrolamiento forzado" en el primer login — no implementado todavía.
+- Pendiente: frontend (pantalla de enrolamiento con QR, input de código de 6 dígitos en login, opción de apagar MFA en configuración de cuenta).
+- Deuda de infraestructura de testing detectada de paso: los tests corren contra la base de datos real de desarrollo (`db:5432/botiq_db`), no contra una base aislada — a diferencia de CI, que sí usa un Postgres efímero. Mejora pendiente, no urgente.
+
+---
+
+## [1.8.0] — 2026-07-15
+
+Primeras pruebas de frontend con `vitest`, y ESLint funcionando de verdad por primera vez en el proyecto.
+
+### Agregado
+- **`vitest` + `@testing-library/react` + `jsdom`** en `frontend/`. Scripts `npm run test` (una sola pasada, usado en CI) y `npm run test:watch` (desarrollo).
+- **3 tests de regresión**: `hooks/useChat.test.js`, `components/ChatWidget/index.test.jsx`, `components/Dashboard/index.test.jsx` — verifican que cada componente se monta sin `ReferenceError`. Validados contra el bug real de la versión 1.5.0 (hooks de React sin importar): corridos contra las versiones rotas antes de esta entrada, fallan con el mismo error que se veía en el navegador; contra las versiones corregidas, pasan.
+- **Configuración de ESLint** (clave `eslintConfig` en `package.json`, no un `.eslintrc.cjs` separado — el proyecto no tenía ninguna config de ESLint hasta ahora, y un archivo `.eslintrc.cjs` resultó estar excluido por `.dockerignore`, invisible para el contenedor). Incluye `eslint-plugin-react-hooks`, que faltaba a pesar de que 3 páginas ya tenían comentarios `eslint-disable-next-line react-hooks/exhaustive-deps` para una regla que no existía sin el plugin.
+- CI: el job `frontend-tests` ahora corre `npm run test` (antes solo hacía lint + build, sin ejecutar ningún test).
+
+### Corregido
+- `Dashboard/index.jsx`: eliminada una línea muerta (`responsiveStyle = document.createElement ? null : null`, no hacía nada) y agregado el mismo comentario `eslint-disable` de `exhaustive-deps` que ya usaban `ConversationLogsPage`/`FaqsPage`/`ReportsPage` para el mismo patrón (efecto que llama a `load()` intencionalmente sin todas las dependencias).
+- `LoginPage.jsx`: el `catch {}` vacío del login ahora tiene un comentario explicando que el estado de error ya lo expone `useAuth` — mismo comportamiento, solo deja de ser un bloque vacío sin explicación.
+- `UsersPage.jsx`: eliminada la constante `ROLE_LABELS`, sin uso — el `<select>` de cambio de rol ya tenía las etiquetas escritas directamente en las opciones (código muerto de una refactorización anterior).
+
+### Notas de auditoría
+- Ninguno de los 3 fixes de código muerto cambia comportamiento visible; son limpieza encontrada al activar ESLint por primera vez sobre código que nunca se había lintado.
+- Pendiente: MFA para rol `admin`, CSP en `nginx.conf`, plan de actualización de dependencias con vulnerabilidades conocidas de salto de versión mayor (`Pillow`, `aiohttp`, `pypdf`, `protobuf`, `starlette`).
+
+---
+
 ## [1.7.0] — 2026-07-14
 
 Continuación del backlog de Fase 1: pruebas de sesión, cierre de `/auth/register`, y primeras dependencias actualizadas por seguridad.

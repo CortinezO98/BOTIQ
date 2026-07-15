@@ -17,6 +17,7 @@ class UserResponse(BaseModel):
     role: UserRole
     is_active: bool
     created_at: datetime
+    mfa_enabled: bool = False
     model_config = {"from_attributes": True}
 
 class TokenResponse(BaseModel):
@@ -38,3 +39,33 @@ class AdminChangeRole(BaseModel):
     role: UserRole
 
 
+# ── MFA ──────────────────────────────────────────────────────────────────
+
+class MfaChallengeResponse(BaseModel):
+    """
+    Respuesta de /auth/login cuando el usuario tiene MFA activo: en vez de
+    la sesión, entrega un token de desafío de corta vida para /auth/mfa/verify.
+    """
+    mfa_required: bool = True
+    mfa_challenge_token: str
+
+
+class MfaSetupResponse(BaseModel):
+    """Respuesta de /auth/mfa/setup: QR + secreto para carga manual."""
+    secret: str
+    otpauth_uri: str
+    qr_code_base64: str
+
+
+class MfaConfirmRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class MfaVerifyRequest(BaseModel):
+    mfa_challenge_token: str
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class MfaDisableRequest(BaseModel):
+    password: str
+    code: str = Field(..., min_length=6, max_length=6)

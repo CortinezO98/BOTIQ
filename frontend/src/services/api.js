@@ -58,6 +58,13 @@ export const authAPI = {
   me: () => api.get("/auth/me"),
   refresh: () => api.post("/auth/refresh"),
   logout: () => api.post("/auth/logout"),
+
+  // MFA (TOTP)
+  mfaVerify: (mfaChallengeToken, code) =>
+    api.post("/auth/mfa/verify", { mfa_challenge_token: mfaChallengeToken, code }),
+  mfaSetup: () => api.post("/auth/mfa/setup"),
+  mfaConfirm: (code) => api.post("/auth/mfa/confirm", { code }),
+  mfaDisable: (password, code) => api.post("/auth/mfa/disable", { password, code }),
 };
 
 export const chatAPI = {

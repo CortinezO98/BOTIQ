@@ -17,6 +17,14 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
+
+    # ── MFA (TOTP) ────────────────────────────────────────────────────────
+    # mfa_secret_encrypted nunca guarda el secreto en texto plano: se cifra
+    # con Fernet (ver app/core/mfa.py) derivando la clave de SECRET_KEY.
+    # Mientras mfa_enabled es False, un secreto presente significa
+    # "enrolamiento pendiente de confirmar" (ver /auth/mfa/setup + /confirm).
+    mfa_enabled = Column(Boolean, default=False, nullable=False)
+    mfa_secret_encrypted = Column(String(255), nullable=True)
+    mfa_enrolled_at = Column(DateTime(timezone=True), nullable=True)
+
     conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
-
-

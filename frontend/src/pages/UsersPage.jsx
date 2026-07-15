@@ -4,12 +4,6 @@ import { adminAPI } from "../services/api";
 
 const C = "#272163";
 
-const ROLE_LABELS = {
-  admin: "Administrador",
-  support_engineer: "Ing. Soporte",
-  employee: "Empleado",
-};
-
 const initialForm = {
   email: "",
   full_name: "",
@@ -415,6 +409,3 @@ const badgeStyle = {
   fontSize: 11,
   fontWeight: 700,
 };
-
-
-

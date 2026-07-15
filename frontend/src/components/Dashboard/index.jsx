@@ -83,6 +83,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days]);
 
   const syncDrive = async () => {
@@ -438,7 +439,6 @@ const listMetaStyle = { color: "#6b6b8a", fontSize: 11, marginTop: 3 };
 const loaderStyle = { width: 42, height: 42, border: "3px solid #e2e1f0", borderTop: `3px solid ${C}`, borderRadius: "50%", animation: "botiqSpin 0.8s linear infinite", margin: "0 auto 14px" };
 
 // Responsive rules injected here because this component usa estilos inline.
-const responsiveStyle = document.createElement ? null : null;
 
 if (typeof document !== "undefined" && !document.getElementById("botiq-dashboard-responsive-style")) {
   const style = document.createElement("style");
@@ -453,6 +453,4 @@ if (typeof document !== "undefined" && !document.getElementById("botiq-dashboard
   `;
   document.head.appendChild(style);
 }
-
-
 
