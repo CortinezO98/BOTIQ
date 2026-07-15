@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import Navbar from "../components/Layout/Navbar";
+import AppShell from "../components/Layout/AppShell";
 import { supportAPI } from "../services/api";
 
 const C = "#272163";
@@ -103,8 +103,7 @@ export default function KnowledgeBasePage() {
   const summary = docsData?.summary;
 
   return (
-    <div className="botiq-page botiq-admin-page">
-      <Navbar currentPage="knowledge-base" />
+    <AppShell currentPage="knowledge-base">
 
       <main className="botiq-page-main">
         <header
@@ -266,7 +265,7 @@ export default function KnowledgeBasePage() {
           </>
         )}
       </main>
-    </div>
+    </AppShell>
   );
 }
 

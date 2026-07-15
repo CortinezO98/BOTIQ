@@ -14,7 +14,7 @@ import {
   YAxis,
 } from "recharts";
 
-import Navbar from "../components/Layout/Navbar";
+import AppShell from "../components/Layout/AppShell";
 import { chatAPI, dashboardAPI, downloadBlob, downloadCsvFromRows } from "../services/api";
 
 const C = "#272163";
@@ -98,8 +98,7 @@ export default function ReportsPage() {
   }, [byDay]);
 
   return (
-    <div className="botiq-page botiq-admin-page">
-      <Navbar currentPage="reports" />
+    <AppShell currentPage="reports">
 
       <main className="botiq-page-main">
         <header
@@ -254,7 +253,7 @@ export default function ReportsPage() {
           </div>
         </section>
       </main>
-    </div>
+    </AppShell>
   );
 }
 

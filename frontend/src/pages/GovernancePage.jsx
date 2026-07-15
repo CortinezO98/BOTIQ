@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import Navbar from "../components/Layout/Navbar";
+import AppShell from "../components/Layout/AppShell";
 import { adminAPI } from "../services/api";
 import { SkeletonCard } from "../components/Skeleton";
 
@@ -113,8 +113,7 @@ export default function GovernancePage() {
   const openIncidentsCount = incidents.filter((i) => i.status === "open").length;
 
   return (
-    <div className="botiq-page botiq-admin-page">
-      <Navbar currentPage="governance" />
+    <AppShell currentPage="governance">
 
       <main className="botiq-page-main">
         <header style={{ marginBottom: 24 }}>
@@ -271,7 +270,7 @@ export default function GovernancePage() {
           </section>
         )}
       </main>
-    </div>
+    </AppShell>
   );
 }
 

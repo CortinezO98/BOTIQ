@@ -32,6 +32,16 @@ vi.mock("../hooks/useTheme", () => ({
     useTheme: () => ({ theme: "light", toggleTheme: vi.fn() }),
 }));
 
+vi.mock("../hooks/useSidebar", () => ({
+    useSidebar: () => ({
+        collapsed: false,
+        toggleCollapsed: vi.fn(),
+        mobileOpen: false,
+        toggleMobile: vi.fn(),
+        closeMobile: vi.fn(),
+    }),
+}));
+
 import UsersPage from "./UsersPage";
 
 describe("UsersPage", () => {

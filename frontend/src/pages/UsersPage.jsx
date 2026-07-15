@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import Navbar from "../components/Layout/Navbar";
+import AppShell from "../components/Layout/AppShell";
 import { adminAPI } from "../services/api";
 
 const C = "#272163";
@@ -104,8 +104,7 @@ export default function UsersPage() {
   };
 
   return (
-    <div className="botiq-page botiq-admin-page">
-      <Navbar currentPage="users" />
+    <AppShell currentPage="users">
 
       <main className="botiq-page-main">
         <header style={{ marginBottom: 24 }}>
@@ -296,7 +295,7 @@ export default function UsersPage() {
           )}
         </section>
       </main>
-    </div>
+    </AppShell>
   );
 }
 

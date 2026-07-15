@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import Navbar from "../components/Layout/Navbar";
+import AppShell from "../components/Layout/AppShell";
 import BotiqAvatar from "../components/Brand/BotiqAvatar";
 import { chatAPI, downloadBlob } from "../services/api";
 
@@ -82,8 +82,7 @@ export default function ConversationLogsPage() {
   }, []);
 
   return (
-    <div className="botiq-page botiq-admin-page">
-      <Navbar currentPage="conversation-logs" />
+    <AppShell currentPage="conversation-logs">
 
       <main className="botiq-page-main">
         <header
@@ -209,7 +208,7 @@ export default function ConversationLogsPage() {
       </main>
 
       {selected && <ConversationModal item={selected} onClose={() => setSelected(null)} />}
-    </div>
+    </AppShell>
   );
 }
 

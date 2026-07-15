@@ -1,5 +1,5 @@
 import { useState } from "react";
-import Navbar from "../components/Layout/Navbar";
+import AppShell from "../components/Layout/AppShell";
 import { authAPI } from "../services/api";
 import { useAuth } from "../hooks/useAuth";
 
@@ -75,8 +75,7 @@ export default function SecurityPage() {
     };
 
     return (
-        <div className="botiq-page botiq-admin-page">
-        <Navbar currentPage="security" />
+        <AppShell currentPage="security">
 
         <main className="botiq-page-main">
             <header style={{ marginBottom: 24 }}>
@@ -218,7 +217,7 @@ export default function SecurityPage() {
             )}
             </section>
         </main>
-        </div>
+        </AppShell>
     );
 }
 

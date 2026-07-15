@@ -13,6 +13,7 @@ import SecurityPage from "./pages/SecurityPage";
 import UsersPage from "./pages/UsersPage";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { ThemeProvider } from "./hooks/useTheme";
+import { SidebarProvider } from "./hooks/useSidebar";
 
 const C = "#272163";
 
@@ -63,9 +64,11 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
+        <SidebarProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </SidebarProvider>
       </AuthProvider>
     </ThemeProvider>
   );

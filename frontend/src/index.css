@@ -74,8 +74,8 @@
   --botiq-surface: #1e1b3a;
   --botiq-card-bg: #2a2652;
   --botiq-border: #3d3870;
-  --botiq-text: #e4e2f2;
-  --botiq-muted: #a8a4c9;
+  --botiq-text: #f5f4fb;
+  --botiq-muted: #c9c5e8;
   --botiq-heading: #b8ace8;
   --botiq-shadow: 0 18px 46px rgba(0, 0, 0, 0.35);
 
@@ -478,6 +478,77 @@ a {
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
   margin-top: 12px;
+}
+
+/* ── Sidebar colapsable ──────────────────────────────────────────────────
+ * Reemplaza el navbar horizontal de arriba. Ancho fijo a la izquierda en
+ * desktop (transiciona entre expandido/colapsado), drawer superpuesto en
+ * mobile (no empuja el contenido, aparece encima).
+ */
+:root {
+  --botiq-sidebar-width: 236px;
+  --botiq-sidebar-width-collapsed: 72px;
+}
+
+.botiq-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--botiq-sidebar-width);
+  background: linear-gradient(180deg, var(--botiq-primary), var(--botiq-primary-light));
+  display: flex;
+  flex-direction: column;
+  z-index: 200;
+  transition: width 0.2s ease, transform 0.2s ease;
+  overflow-x: hidden;
+}
+
+.botiq-sidebar--collapsed {
+  width: var(--botiq-sidebar-width-collapsed);
+}
+
+.botiq-sidebar-content {
+  margin-left: var(--botiq-sidebar-width);
+  min-height: 100vh;
+  transition: margin-left 0.2s ease;
+}
+
+.botiq-sidebar-content--collapsed {
+  margin-left: var(--botiq-sidebar-width-collapsed);
+}
+
+.botiq-sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .botiq-nav-mobile-toggle {
+    display: flex !important;
+  }
+
+  .botiq-sidebar {
+    transform: translateX(-100%);
+    width: min(80vw, 280px);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
+  }
+
+  .botiq-sidebar--mobile-open {
+    transform: translateX(0);
+  }
+
+  .botiq-sidebar-content,
+  .botiq-sidebar-content--collapsed {
+    margin-left: 0;
+  }
+
+  .botiq-sidebar-backdrop--visible {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 190;
+  }
 }
 
 /* Reportería */

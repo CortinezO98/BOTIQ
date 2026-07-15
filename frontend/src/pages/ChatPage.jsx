@@ -1,5 +1,5 @@
 import BotiqAvatar from "../components/Brand/BotiqAvatar";
-import Navbar from "../components/Layout/Navbar";
+import AppShell from "../components/Layout/AppShell";
 import { useAuth } from "../hooks/useAuth";
 
 const C = "#272163";
@@ -10,9 +10,7 @@ export default function ChatPage() {
   const firstName = user?.full_name?.split(" ")[0] || "Usuario";
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--botiq-surface)" }}>
-      <Navbar currentPage="chat" />
-
+    <AppShell currentPage="chat">
       <main
         className="animate__animated animate__fadeIn"
         style={{
@@ -121,7 +119,7 @@ export default function ChatPage() {
           </p>
         </section>
       </main>
-    </div>
+    </AppShell>
   );
 }
 

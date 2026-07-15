@@ -1,15 +1,10 @@
 import Dashboard from "../components/Dashboard";
-import Navbar from "../components/Layout/Navbar";
+import AppShell from "../components/Layout/AppShell";
 
 export default function DashboardPage() {
   return (
-    <div className="botiq-page-shell">
-      <Navbar currentPage="dashboard" />
+    <AppShell currentPage="dashboard">
       <Dashboard />
-    </div>
+    </AppShell>
   );
 }
-
-
-
-
