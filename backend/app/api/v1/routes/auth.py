@@ -84,6 +84,16 @@ async def _issue_refresh_token(db: AsyncSession, user_id, user_agent: Optional[s
 @limiter.limit(settings.LOGIN_RATE_LIMIT)
 async def register(request: Request, data: UserRegister, db: AsyncSession = Depends(get_db)):
     normalized_email = data.email.lower()
+
+    allowed_domains = settings.get_registration_allowed_domains()
+    if allowed_domains:
+        email_domain = normalized_email.split("@")[-1]
+        if email_domain not in allowed_domains:
+            raise HTTPException(
+                status_code=403,
+                detail="El registro público solo está habilitado para correos corporativos.",
+            )
+
     result = await db.execute(select(User).where(func.lower(User.email) == normalized_email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="El email ya está registrado")

@@ -6,6 +6,53 @@ Versionamiento basado en [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.7.0] — 2026-07-14
+
+Continuación del backlog de Fase 1: pruebas de sesión, cierre de `/auth/register`, y primeras dependencias actualizadas por seguridad.
+
+### Agregado
+- **Pruebas de integración** (`tests/integration/test_auth_session.py`): cubren cookies httpOnly en login, `/auth/me` vía cookie sin header, rotación de refresh token (el usado queda inválido), `/auth/refresh` sin cookie → 401, `/auth/logout`, y login case-insensitive. Cierra la deuda dejada en 1.6.0.
+- `REGISTRATION_ALLOWED_EMAIL_DOMAINS` en `config.py` (default `iq-online.com`): `/auth/register` ahora rechaza con 403 cualquier dominio fuera de la lista. Antes cualquiera con la URL podía autoregistrarse como `employee`.
+- CI: `pip-audit` bloqueante para las dependencias ya auditadas (`python-dotenv`, `pytest`, `pytest-asyncio`); el resto de `requirements.txt` se sigue reportando sin bloquear, pendiente de un plan de actualización mayor (`Pillow`, `aiohttp`, `pypdf`, `protobuf`, `starlette`, `ecdsa` — todos requieren saltos de versión mayor con pruebas de compatibilidad propias).
+
+### Cambiado
+- `requirements.txt`: `python-dotenv` 1.0.1→1.2.2, `pytest` 8.2.0→9.0.3, `pytest-asyncio` 0.23.7→1.4.0 (vulnerabilidades reportadas por `pip-audit`, verificadas sin romper nada antes de subir).
+- `pytest.ini`: `asyncio_default_fixture_loop_scope` y `asyncio_default_test_loop_scope` en `session`, reemplazando el fixture `event_loop` manual de `tests/conftest.py`.
+- `.github/workflows/ci.yml`: se eliminó un `pip install pytest pytest-asyncio httpx pytest-cov` sin versión fija que pisaba silenciosamente los pines de `requirements.txt` en cada corrida de CI.
+
+### Corregido
+- **Regresión introducida por el bump de `pytest-asyncio`**: el fixture `event_loop(scope="session")` de `tests/conftest.py` dejó de ser respetado por `pytest-asyncio` 1.x. Cada test pasó a correr en un event loop nuevo, pero el pool de conexiones async de SQLAlchemy (creado una sola vez a nivel de módulo) quedaba con conexiones anclabas al loop del primer test, causando `RuntimeError: ... attached to a different loop` en tests que reutilizaban una conexión pooleada de un test anterior. Reproducido con Postgres real antes de corregir; solucionado configurando el scope de sesión directamente en `pytest.ini` en vez de sobreescribir el fixture.
+
+### Notas de auditoría
+- Pendiente: plan de actualización para `Pillow`, `aiohttp`, `pypdf`, `protobuf` y `starlette` (saltos de versión mayor, requieren pruebas de compatibilidad — `pypdf` en particular puede afectar `document_ai_service.py`). `ecdsa` no tiene fix disponible todavía (dependencia transitiva).
+
+---
+
+## [1.6.0] — 2026-07-14
+
+Migración de sesión: JWT en `localStorage` → cookies `httpOnly` + refresh token con rotación (backlog de seguridad de la auditoría SWEBOK, Fase 1 — Alta prioridad).
+
+### Agregado
+- **Tabla `refresh_tokens`** (migración `20260714_0008`): guarda el hash SHA-256 del refresh token (nunca el valor real), con `expires_at`, `revoked_at` y `user_agent` para trazabilidad básica. Permite revocar sesiones individuales sin tocar el `SECRET_KEY` global.
+- **`POST /auth/refresh`**: renueva la sesión leyendo el refresh token de la cookie httpOnly. Rotación en cada llamada — el token usado se revoca y se emite uno nuevo, así un refresh token robado deja de servir apenas el dueño real lo use.
+- **`POST /auth/logout`**: revoca el refresh token activo en base de datos y limpia ambas cookies.
+- **Cookies `httpOnly`** en `/auth/login`: `botiq_access_token` (misma duración que el JWT, `path=/`) y `botiq_refresh_token` (30 días, restringida a `path=/api/v1/auth` para que no viaje en cada request de la API). `Secure` se activa solo en producción (nginx sirve HTTPS real); `SameSite=Lax` alcanza porque `localhost:5180` → `localhost:8002` es cross-*origin* pero mismo *site*.
+- `app/core/security.py`: `generate_refresh_token()` (token opaco de alta entropía, no JWT) y `hash_refresh_token()`.
+- `app/core/config.py`: `ACCESS_TOKEN_COOKIE_NAME`, `REFRESH_TOKEN_COOKIE_NAME`, `REFRESH_TOKEN_EXPIRE_DAYS` (default 30).
+- **Interceptor de renovación silenciosa** en `frontend/src/services/api.js`: ante un 401, intenta `/auth/refresh` una vez y reintenta la petición original antes de dar la sesión por expirada.
+
+### Cambiado
+- `app/api/deps.py`: `get_current_user` ahora acepta el token por header `Authorization: Bearer` **o** por cookie httpOnly (en ese orden), sin romper compatibilidad con Swagger/Postman/scripts que ya usaban el header.
+- `app/api/v1/routes/auth.py`: `/login` sigue devolviendo `access_token` en el body (compatibilidad), pero además setea las cookies de sesión. `/login` y `/register` ahora comparan el email de forma case-insensitive (`func.lower`) en vez de asumir que ya está normalizado en la base.
+- `frontend/src/hooks/useAuth.js`: ya no guarda token ni usuario en `localStorage`. La sesión se valida contra `/auth/me` en cada carga de página (cookie httpOnly viaja sola). `logout()` ahora es async y llama a `/auth/logout` antes de limpiar el estado local.
+- `frontend/src/services/api.js`: cliente axios con `withCredentials: true` (necesario para que el navegador mande/reciba las cookies en llamadas cross-origin `:5180` → `:8002`).
+
+### Notas de auditoría
+- Pendiente: pruebas de integración para `/auth/refresh` y `/auth/logout` (hoy solo hay verificación manual). Agregar en el sprint de testing de Fase 1.
+- No se implementó límite de sesiones concurrentes por usuario ni un endpoint de "cerrar todas mis sesiones" — queda como mejora de Fase 2 si se necesita.
+
+---
+
 ## [1.5.0] — 2026-07-14
 
 Cierre del primer sprint de estabilización técnica (Fase 1 de la auditoría SWEBOK).

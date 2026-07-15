@@ -66,11 +66,27 @@ jobs:
             --format github \
             || true  # Reporta pero no bloquea en fase inicial
 
-      - name: pip-audit dependency scan
+      # ── pip-audit BLOQUEANTE, solo para las dependencias ya auditadas y
+      # actualizadas a versión segura (python-dotenv, pytest, pytest-asyncio).
+      # Objetivo: que estas 3 nunca vuelvan a quedar desactualizadas sin que
+      # el CI lo note, sin bloquear el pipeline por el resto de dependencias
+      # que todavía requieren pruebas de compatibilidad (ver paso siguiente).
+      - name: pip-audit (bloqueante) — dependencias ya auditadas
+        run: |
+          cd backend
+          printf "python-dotenv==1.2.2\npytest==9.0.3\npytest-asyncio==1.4.0\n" > /tmp/audited-deps.txt
+          pip-audit -r /tmp/audited-deps.txt --format=markdown
+
+      # ── pip-audit INFORMATIVO sobre el resto de requirements.txt.
+      # Pendiente de actualización (requieren pruebas de compatibilidad antes
+      # de subir versión, por ser saltos de versión mayor): Pillow, aiohttp,
+      # pypdf, protobuf (vía google-cloud-aiplatform), starlette (vía FastAPI).
+      # ecdsa no tiene fix disponible todavía (dependencia transitiva).
+      - name: pip-audit (informativo) — resto de dependencias
         run: |
           cd backend
           pip-audit -r requirements.txt --format=markdown \
-            || true  # Reporta pero no bloquea en fase inicial
+            || true  # Reporta pero no bloquea: pendiente de plan de actualización mayor
 
   # ── 3. Tests y cobertura ─────────────────────────────────────────────────
   backend-tests:
@@ -104,7 +120,11 @@ jobs:
         run: |
           cd backend
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio httpx pytest-cov
+          # Antes había un segundo "pip install pytest pytest-asyncio httpx
+          # pytest-cov" sin versión fija acá, que pisaba silenciosamente las
+          # versiones pineadas de requirements.txt en cada corrida de CI.
+          # requirements.txt ya trae pytest/pytest-asyncio/httpx/pytest-cov
+          # pineados, así que esa línea sobraba y además era un riesgo.
 
       - name: Run tests with coverage
         env:

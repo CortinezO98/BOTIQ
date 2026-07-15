@@ -11,7 +11,7 @@ _DEV_SECRET_KEY = "dev-secret-change-in-production-32chars!!"
 
 class Settings(BaseSettings):
     APP_NAME: str = "BOTIQ"
-    APP_VERSION: str = "1.5.0"
+    APP_VERSION: str = "1.7.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
@@ -131,6 +131,12 @@ class Settings(BaseSettings):
     REQUIRE_SUPPORT_NETWORK_VALIDATION: bool = True
     SUPPORT_ALLOWED_EMAIL_DOMAINS: str = "iq-online.com"
 
+    # Dominios permitidos para auto-registro público en /auth/register.
+    # Vacío = sin restricción (NO recomendado en producción). Antes de este
+    # cambio, /auth/register no validaba dominio: cualquiera con la URL
+    # podía crear una cuenta "employee" y consultar al bot.
+    REGISTRATION_ALLOWED_EMAIL_DOMAINS: str = "iq-online.com"
+
     BUSINESS_SCOPE_KEYWORDS: str = (
         "portal,sistema,aplicacion,aplicación,aplicativo,app,url,pagina,página,ip,"
         "correo,outlook,excel,word,teams,vpn,contraseña,password,login,acceso,"
@@ -174,6 +180,9 @@ class Settings(BaseSettings):
 
     def get_support_allowed_domains(self) -> List[str]:
         return [d.strip().lower() for d in self.SUPPORT_ALLOWED_EMAIL_DOMAINS.split(",") if d.strip()]
+
+    def get_registration_allowed_domains(self) -> List[str]:
+        return [d.strip().lower() for d in self.REGISTRATION_ALLOWED_EMAIL_DOMAINS.split(",") if d.strip()]
 
     def get_business_keywords(self) -> List[str]:
         return [k.strip().lower() for k in self.BUSINESS_SCOPE_KEYWORDS.split(",") if k.strip()]
