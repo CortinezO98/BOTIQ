@@ -5,6 +5,7 @@ import ChatPage from "./pages/ChatPage";
 import ConversationLogsPage from "./pages/ConversationLogsPage";
 import DashboardPage from "./pages/DashboardPage";
 import FaqsPage from "./pages/FaqsPage";
+import GovernancePage from "./pages/GovernancePage";
 import KnowledgeBasePage from "./pages/KnowledgeBasePage";
 import LoginPage from "./pages/LoginPage";
 import ReportsPage from "./pages/ReportsPage";
@@ -49,6 +50,7 @@ function AppRoutes() {
       <Route path="/dashboard/knowledge-base" element={<Guard adminOnly><KnowledgeBasePage /></Guard>} />
       <Route path="/dashboard/conversation-logs" element={<Guard adminOnly><ConversationLogsPage /></Guard>} />
       <Route path="/dashboard/reports" element={<Guard adminOnly><ReportsPage /></Guard>} />
+      <Route path="/dashboard/governance" element={<Guard adminOnly><GovernancePage /></Guard>} />
       <Route path="/dashboard/security" element={<Guard adminOnly showFloatingChat={false}><SecurityPage /></Guard>} />
 
       <Route path="*" element={<Navigate to="/chat" replace />} />

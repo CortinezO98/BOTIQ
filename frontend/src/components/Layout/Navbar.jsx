@@ -17,7 +17,7 @@ export default function Navbar({ currentPage = "chat" }) {
   const roleInfo = ROLE_LABELS[user?.role] || ROLE_LABELS.employee;
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const isDashboardArea = ["dashboard", "users", "faqs", "knowledge-base", "conversation-logs", "reports", "security"].includes(currentPage);
+  const isDashboardArea = ["dashboard", "users", "faqs", "knowledge-base", "conversation-logs", "reports", "security", "governance"].includes(currentPage);
 
   const go = (path) => {
     setMobileOpen(false);
@@ -34,6 +34,7 @@ export default function Navbar({ currentPage = "chat" }) {
           <NavBtn active={currentPage === "knowledge-base"} onClick={() => go("/dashboard/knowledge-base")}>📚 Base</NavBtn>
           <NavBtn active={currentPage === "conversation-logs"} onClick={() => go("/dashboard/conversation-logs")}>🧾 Logs</NavBtn>
           <NavBtn active={currentPage === "reports"} onClick={() => go("/dashboard/reports")}>📈 Reportes</NavBtn>
+          <NavBtn active={currentPage === "governance"} onClick={() => go("/dashboard/governance")}>🛡️ Gobierno IA</NavBtn>
           <NavBtn active={currentPage === "security"} onClick={() => go("/dashboard/security")}>🔒 Seguridad</NavBtn>
         </>
       )}

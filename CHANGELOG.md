@@ -6,6 +6,37 @@ Versionamiento basado en [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.12.0] — 2026-07-15
+
+Actualización de dependencias con vulnerabilidades conocidas (`pip-audit`): `pypdf`, `Pillow`, `aiohttp`. Primera tanda del plan de actualización mayor — quedan pendientes `protobuf` y `starlette` (ver Notas).
+
+### Cambiado
+- `requirements.txt`: `pypdf` 4.3.1→6.13.3, `Pillow` 10.3.0→12.3.0, `aiohttp` 3.9.5→3.14.1. Cada una verificada antes de subir:
+  - `pypdf`: único uso real es `support_rag/service.py` (`PdfReader`, `.pages`, `.extract_text()`) — probado con un PDF real generado en el momento, mismo resultado que antes.
+  - `Pillow`: no se importa directo en la app — llega vía `qrcode[pil]` para el QR de MFA. Probado generando un QR real con `pyotp` + `qrcode` sobre la versión nueva.
+  - `aiohttp`: no se importa en ningún archivo de la app — dependencia transitiva. `pip check` confirmó que el resto de `requirements.txt` (`chromadb`, `google-cloud-*`) sigue resolviendo sin conflictos.
+- `.github/workflows/ci.yml`: las 3 se suman al gate bloqueante de `pip-audit` (junto a `python-dotenv`, `pytest`, `pytest-asyncio` de 1.7.0).
+
+### Notas de auditoría
+- **Pendiente, a propósito no incluido acá**: `protobuf` (transitiva de `google-cloud-aiplatform` — necesita pruebas contra Vertex AI real, no disponibles en este ciclo) y `starlette` (transitiva de FastAPI — la versión segura es 1.x, pero `FastAPI==0.111.0` no la soporta; hay que subir FastAPI entero primero, lo que toca la capa de request/response de todos los endpoints). Ninguna de las dos se puede actualizar de forma aislada sin arrastrar un cambio mucho más grande.
+- `ecdsa` sigue sin fix disponible (dependencia transitiva) — nada que hacer todavía, revisar periódicamente.
+
+---
+
+## [1.11.0] — 2026-07-15
+
+Revisión completa del frontend en busca de patrones similares al bug de `Guard` (1.10.0): componentes que asumían datos de una arquitectura de sesión que ya cambió.
+
+### Corregido
+- **`embed/widget-entry.jsx` (widget embebible en sitios externos) estaba roto desde 1.6.0**: `BotiqWidget.init({ authToken })` guarda el token en `localStorage["botiq_token"]`, pero el interceptor de `api.js` que lo leía y lo mandaba como header `Authorization` se había sacado en la migración a cookies httpOnly. Cualquier sitio externo embebiendo el widget con `authToken` dejaba de autenticarse por completo (las cookies de BOTIQ no viajan cross-site a un dominio de terceros, que es justamente para lo que existe el parámetro `authToken`). `services/api.js` vuelve a mandar el header cuando ese token está presente en `localStorage`; para la app principal es un no-op, porque nada vuelve a escribir esa clave desde 1.6.0.
+- **`services/api.test.js`** (nuevo): confirma que el header solo se agrega cuando el widget lo setea, y que la app principal (cookies) nunca se ve afectada.
+
+### Notas de auditoría
+- Revisión completa de los 23 archivos `.js`/`.jsx` del frontend: sin otros hallazgos del mismo tipo. `ChatHistory`, `ChatPage`, `main.jsx` y el resto de páginas están limpios.
+- Pendiente: confirmar si el widget embebible está desplegado en algún sitio externo hoy, para validar el flujo `authToken` de punta a punta (no se pudo probar en este ciclo por no tener un dominio externo real disponible).
+
+---
+
 ## [1.10.0] — 2026-07-15
 
 MFA (TOTP) para rol admin — frontend completo (QR de enrolamiento, código en login, panel de Seguridad). Cierra el ítem "MFA para admin" del backlog de seguridad de la auditoría.

@@ -21,9 +21,15 @@ google-api-python-client==2.129.0
 # Fijado a la serie 1.x: chromadb 0.5.0 usa np.float_, eliminado en NumPy 2.0
 numpy==1.26.4
 chromadb==0.5.0
-Pillow==10.3.0
+# Actualizado 10.3.0 -> 12.3.0 (pip-audit: varias PYSEC, no usado directo en
+# el código -- llega vía qrcode[pil] para el QR de MFA -- verificado generando
+# un QR real con pyotp antes de subir la versión.
+Pillow==12.3.0
 httpx==0.27.0
-aiohttp==3.9.5
+# Actualizado 3.9.5 -> 3.14.1 (pip-audit: ~25 PYSEC). No se importa directo
+# en ningún archivo de la app -- dependencia transitiva. pip check confirma
+# que el resto de requirements.txt sigue resolviendo sin conflictos.
+aiohttp==3.14.1
 # Actualizado 1.0.1 -> 1.2.2 (pip-audit: PYSEC-2026-2270). Sin cambios de API.
 python-dotenv==1.2.2
 tenacity==8.3.0
@@ -39,7 +45,11 @@ openpyxl==3.1.5
 # MFA (TOTP) para rol admin
 pyotp==2.9.0
 qrcode[pil]==7.4.2
-pypdf==4.3.1
+# Actualizado 4.3.1 -> 6.13.3 (pip-audit: ~20 PYSEC + GHSA-jm82-fx9c-mx94).
+# Usado en support_rag/service.py (PdfReader, .pages, .extract_text()) --
+# verificado con un PDF real antes de subir la versión, misma API, mismo
+# resultado.
+pypdf==6.13.3
 # Rate limiting en endpoints críticos (login, register, chat)
 slowapi==0.1.9
 limits==3.13.0

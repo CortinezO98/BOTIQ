@@ -67,20 +67,23 @@ jobs:
             || true  # Reporta pero no bloquea en fase inicial
 
       # ── pip-audit BLOQUEANTE, solo para las dependencias ya auditadas y
-      # actualizadas a versión segura (python-dotenv, pytest, pytest-asyncio).
-      # Objetivo: que estas 3 nunca vuelvan a quedar desactualizadas sin que
-      # el CI lo note, sin bloquear el pipeline por el resto de dependencias
-      # que todavía requieren pruebas de compatibilidad (ver paso siguiente).
+      # actualizadas a versión segura (python-dotenv, pytest, pytest-asyncio,
+      # Pillow, aiohttp, pypdf). Objetivo: que estas nunca vuelvan a quedar
+      # desactualizadas sin que el CI lo note, sin bloquear el pipeline por el
+      # resto de dependencias que todavía requieren pruebas de compatibilidad
+      # (ver paso siguiente).
       - name: pip-audit (bloqueante) — dependencias ya auditadas
         run: |
           cd backend
-          printf "python-dotenv==1.2.2\npytest==9.0.3\npytest-asyncio==1.4.0\n" > /tmp/audited-deps.txt
+          printf "python-dotenv==1.2.2\npytest==9.0.3\npytest-asyncio==1.4.0\nPillow==12.3.0\naiohttp==3.14.1\npypdf==6.13.3\n" > /tmp/audited-deps.txt
           pip-audit -r /tmp/audited-deps.txt --format=markdown
 
       # ── pip-audit INFORMATIVO sobre el resto de requirements.txt.
-      # Pendiente de actualización (requieren pruebas de compatibilidad antes
-      # de subir versión, por ser saltos de versión mayor): Pillow, aiohttp,
-      # pypdf, protobuf (vía google-cloud-aiplatform), starlette (vía FastAPI).
+      # Pendiente de actualización (requieren subir una librería más grande
+      # primero, no se pueden bumpear solas): protobuf (vía
+      # google-cloud-aiplatform — necesita pruebas contra Vertex AI real),
+      # starlette (vía FastAPI — la versión segura es 1.x, FastAPI 0.111.0
+      # no la soporta, hace falta subir FastAPI entero primero).
       # ecdsa no tiene fix disponible todavía (dependencia transitiva).
       - name: pip-audit (informativo) — resto de dependencias
         run: |
