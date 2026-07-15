@@ -3,6 +3,7 @@ import Navbar from "../components/Layout/Navbar";
 import { adminAPI, faqAPI } from "../services/api";
 
 const C = "#272163";
+const CH = "var(--botiq-heading)"; // texto/headings: sí se adapta a modo oscuro (C se mantiene fijo por los patrones ${C}XX de alpha-transparencia)
 
 const initialForm = {
   question: "",
@@ -173,7 +174,7 @@ export default function FaqsPage() {
 
       <main className="botiq-page-main">
         <header style={{ marginBottom: 24 }}>
-          <h1 style={{ color: C, fontSize: 24, margin: 0 }}>Gestión de FAQs</h1>
+          <h1 style={{ color: CH, fontSize: 24, margin: 0 }}>Gestión de FAQs</h1>
           <p style={{ color: "var(--botiq-muted)", marginTop: 6, fontSize: 13 }}>
             Administra FAQs aprobadas y revisa conocimiento sugerido por búsquedas web de BOTIQ.
           </p>
@@ -247,12 +248,12 @@ export default function FaqsPage() {
                         <span style={muted}>{item.category || "Sin categoría"}</span>
                         <span style={muted}>Uso: {item.usage_count || 0}</span>
                       </div>
-                      <h3 style={{ margin: "8px 0", color: C, fontSize: 15 }}>{item.question}</h3>
+                      <h3 style={{ margin: "8px 0", color: CH, fontSize: 15 }}>{item.question}</h3>
                       <p style={{ ...muted, whiteSpace: "pre-wrap", marginBottom: 10 }}>{item.answer}</p>
 
                       {item.sources?.length > 0 && (
                         <details style={{ marginBottom: 10 }}>
-                          <summary style={{ cursor: "pointer", color: C, fontWeight: 700 }}>Fuentes públicas consultadas</summary>
+                          <summary style={{ cursor: "pointer", color: CH, fontWeight: 700 }}>Fuentes públicas consultadas</summary>
                           <ul style={{ marginTop: 8 }}>
                             {item.sources.map((s, idx) => (
                               <li key={`${item.id}-${idx}`} style={{ fontSize: 12, color: "#4b4b6b" }}>
@@ -331,7 +332,7 @@ export default function FaqsPage() {
                         {faq.category && <span style={chipStyle}>{faq.category}</span>}
                         <span style={muted}>{faq.hit_count || 0} usos</span>
                       </div>
-                      <h3 style={{ margin: "8px 0", color: C, fontSize: 16 }}>{faq.question}</h3>
+                      <h3 style={{ margin: "8px 0", color: CH, fontSize: 16 }}>{faq.question}</h3>
                       <p style={{ color: "#4b4b6b", fontSize: 13, whiteSpace: "pre-wrap" }}>{faq.answer}</p>
                       {faq.tags?.length > 0 && (
                         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
@@ -385,20 +386,20 @@ const cardStyle = {
   marginBottom: 18,
 };
 
-const sectionTitle = { color: C, fontSize: 18, margin: 0 };
+const sectionTitle = { color: CH, fontSize: 18, margin: 0 };
 const muted = { color: "var(--botiq-muted)", fontSize: 13, margin: 0 };
 const alertStyle = { background: "#fff1f1", color: "#b42318", border: "1px solid #ffcaca", padding: 12, borderRadius: 12, marginBottom: 16 };
 const headerRow = { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 14 };
 const formGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 };
 const inputStyle = { border: "1px solid #d8d7ea", borderRadius: 10, padding: "10px 12px", outline: "none", fontSize: 13, minWidth: 180 };
 const primaryBtn = { background: C, color: "#fff", border: 0, borderRadius: 10, padding: "10px 14px", fontWeight: 800, cursor: "pointer" };
-const secondaryBtn = { background: "#f4f3ff", color: C, border: "1px solid #d9d6ff", borderRadius: 10, padding: "10px 14px", fontWeight: 800, cursor: "pointer" };
+const secondaryBtn = { background: "#f4f3ff", color: CH, border: "1px solid #d9d6ff", borderRadius: 10, padding: "10px 14px", fontWeight: 800, cursor: "pointer" };
 const dangerBtn = { background: "#fff1f1", color: "#b42318", border: "1px solid #ffcaca", borderRadius: 10, padding: "10px 14px", fontWeight: 800, cursor: "pointer" };
 const emptyStyle = { padding: 18, borderRadius: 12, background: "#f7f7fc", color: "var(--botiq-muted)", fontSize: 13 };
 const faqCard = { border: "1px solid #eeedf8", borderRadius: 14, padding: 14, background: "var(--botiq-card-bg)" };
 const suggestionCard = { border: "1px solid #f1dfb8", borderRadius: 14, padding: 14, background: "#fffaf0" };
 const badgeRow = { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" };
-const chipStyle = { background: "#f4f3ff", color: C, fontWeight: 800, fontSize: 11, padding: "5px 8px", borderRadius: 999 };
+const chipStyle = { background: "#f4f3ff", color: CH, fontWeight: 800, fontSize: 11, padding: "5px 8px", borderRadius: 999 };
 const tagStyle = { background: "#f8f8fc", color: "#5c5b75", fontSize: 11, padding: "4px 8px", borderRadius: 999 };
 const statusBadge = (status) => ({
   background: status === "approved" ? "#e8fff1" : status === "rejected" ? "#fff1f1" : "#fff4d6",

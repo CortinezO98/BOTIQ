@@ -3,6 +3,7 @@ import Navbar from "../components/Layout/Navbar";
 import { useAuth } from "../hooks/useAuth";
 
 const C = "#272163";
+const CH = "var(--botiq-heading)"; // texto/headings: sí se adapta a modo oscuro (C se mantiene fijo por los patrones ${C}XX de alpha-transparencia)
 
 export default function ChatPage() {
   const { user, isSupport } = useAuth();
@@ -60,7 +61,7 @@ export default function ChatPage() {
             style={{
               fontSize: "clamp(24px, 4vw, 32px)",
               fontWeight: 900,
-              color: C,
+              color: CH,
               marginBottom: 10,
               letterSpacing: "-0.7px",
             }}
@@ -108,7 +109,7 @@ export default function ChatPage() {
                 maxWidth: 560,
               }}
             >
-              <p style={{ fontSize: 12, color: C, fontWeight: 750, margin: 0, lineHeight: 1.6 }}>
+              <p style={{ fontSize: 12, color: CH, fontWeight: 750, margin: 0, lineHeight: 1.6 }}>
                 🔧 Modo Ingeniero de Soporte — acceso a RAG, base de conocimiento,
                 validación de usuario de red y análisis de servidores.
               </p>
@@ -130,7 +131,7 @@ function Chip({ children }) {
       style={{
         background: "var(--botiq-surface)",
         border: "1px solid var(--botiq-border)",
-        color: C,
+        color: CH,
         padding: "7px 12px",
         borderRadius: 999,
         fontSize: 12,

@@ -4,6 +4,7 @@ import { adminAPI } from "../services/api";
 import { SkeletonCard } from "../components/Skeleton";
 
 const C = "#272163";
+const CH = "var(--botiq-heading)"; // texto/headings: sí se adapta a modo oscuro (C se mantiene fijo por los patrones ${C}XX de alpha-transparencia)
 
 const SEVERITY_INFO = {
   critical: { label: "Crítica", color: "#dc2626", bg: "#fef2f2" },
@@ -117,7 +118,7 @@ export default function GovernancePage() {
 
       <main className="botiq-page-main">
         <header style={{ marginBottom: 24 }}>
-          <h1 style={{ color: C, fontSize: 24, margin: 0 }}>Gobierno de IA</h1>
+          <h1 style={{ color: CH, fontSize: 24, margin: 0 }}>Gobierno de IA</h1>
           <p style={{ color: "var(--botiq-muted)", marginTop: 6, fontSize: 13 }}>
             Incidentes masivos, calidad de respuestas y aprobación de conocimiento generado sin fuente interna.
           </p>
@@ -156,7 +157,7 @@ export default function GovernancePage() {
                   <div key={alert.id} style={{ ...itemCard, borderLeft: `4px solid ${sev.color}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
                       <div>
-                        <strong style={{ color: C, fontSize: 14 }}>
+                        <strong style={{ color: CH, fontSize: 14 }}>
                           {alert.application_name || alert.app_or_url || "Aplicativo no identificado"}
                         </strong>
                         <span style={{ ...badgeStyle, background: sev.bg, color: sev.color, marginLeft: 10 }}>
@@ -226,7 +227,7 @@ export default function GovernancePage() {
               {aiItems.map((item) => (
                 <div key={item.id} style={itemCard}>
                   <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-                    <strong style={{ color: C, fontSize: 13 }}>{item.question}</strong>
+                    <strong style={{ color: CH, fontSize: 13 }}>{item.question}</strong>
                     {item.confidence != null && <ConfidenceBadge value={item.confidence} />}
                   </div>
 
@@ -309,7 +310,7 @@ function Tabs({ tabs, value, onChange }) {
             fontWeight: 600,
             cursor: "pointer",
             background: value === tab.value ? C : "var(--botiq-surface)",
-            color: value === tab.value ? "#fff" : C,
+            color: value === tab.value ? "#fff" : CH,
           }}
         >
           {tab.label}
@@ -335,7 +336,7 @@ const itemCard = {
   padding: 14,
 };
 
-const sectionTitle = { color: C, fontSize: 16, margin: "0 0 4px" };
+const sectionTitle = { color: CH, fontSize: 16, margin: "0 0 4px" };
 
 const badgeStyle = {
   display: "inline-block",
@@ -354,7 +355,7 @@ const primaryBtnBase = {
 };
 
 const smallPrimaryBtn = { ...primaryBtnBase, background: C, padding: "7px 12px", fontSize: 12 };
-const smallSecondaryBtn = { background: "var(--botiq-surface)", color: C, border: "1px solid var(--botiq-border)", borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontWeight: 600, fontSize: 12 };
+const smallSecondaryBtn = { background: "var(--botiq-surface)", color: CH, border: "1px solid var(--botiq-border)", borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontWeight: 600, fontSize: 12 };
 const smallDangerBtn = { background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontWeight: 600, fontSize: 12 };
 
 const alertStyle = {

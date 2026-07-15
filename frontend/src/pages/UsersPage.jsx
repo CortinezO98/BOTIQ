@@ -3,6 +3,7 @@ import Navbar from "../components/Layout/Navbar";
 import { adminAPI } from "../services/api";
 
 const C = "#272163";
+const CH = "var(--botiq-heading)"; // texto/headings: sí se adapta a modo oscuro (C se mantiene fijo por los patrones ${C}XX de alpha-transparencia)
 
 const initialForm = {
   email: "",
@@ -108,7 +109,7 @@ export default function UsersPage() {
 
       <main className="botiq-page-main">
         <header style={{ marginBottom: 24 }}>
-          <h1 style={{ color: C, fontSize: 24, margin: 0 }}>Gestión de usuarios</h1>
+          <h1 style={{ color: CH, fontSize: 24, margin: 0 }}>Gestión de usuarios</h1>
           <p style={{ color: "var(--botiq-muted)", marginTop: 6, fontSize: 13 }}>
             Crea usuarios, cambia roles y administra accesos de BOTIQ.
           </p>
@@ -311,7 +312,7 @@ function UserCard({ user, editing, editForm, setEditForm, onStartEdit, onCancelE
               style={{ ...inputStyle, marginBottom: 4 }}
             />
           ) : (
-            <h3 style={{ color: C, fontSize: 14, margin: 0, overflowWrap: "anywhere" }}>{user.full_name}</h3>
+            <h3 style={{ color: CH, fontSize: 14, margin: 0, overflowWrap: "anywhere" }}>{user.full_name}</h3>
           )}
           <p style={{ color: "var(--botiq-muted)", fontSize: 12, margin: "4px 0 0", overflowWrap: "anywhere" }}>{user.email}</p>
         </div>
@@ -400,7 +401,7 @@ const cardStyle = {
 };
 
 const sectionTitle = {
-  color: C,
+  color: CH,
   fontSize: 16,
   margin: "0 0 16px",
 };
@@ -442,7 +443,7 @@ const primaryBtn = {
 
 const secondaryBtn = {
   background: "var(--botiq-surface)",
-  color: C,
+  color: CH,
   border: "1px solid var(--botiq-border)",
   borderRadius: 8,
   padding: "8px 12px",
@@ -480,7 +481,7 @@ const tableStyle = {
 
 const thStyle = {
   textAlign: "left",
-  color: C,
+  color: CH,
   borderBottom: "1px solid var(--botiq-border)",
   padding: "10px 8px",
   whiteSpace: "nowrap",

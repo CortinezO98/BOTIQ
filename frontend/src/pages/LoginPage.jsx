@@ -5,6 +5,7 @@ import BotiqLogo from "../components/Brand/BotiqLogo";
 import BotiqAvatar from "../components/Brand/BotiqAvatar";
 
 const C = "#272163";
+const CH = "var(--botiq-heading)"; // texto/headings: sí se adapta a modo oscuro (C se mantiene fijo por los patrones ${C}XX de alpha-transparencia)
 const CL = "#3a3490";
 
 export default function LoginPage() {
@@ -157,7 +158,7 @@ export default function LoginPage() {
                   <BotiqAvatar size={72} online />
                 </div>
 
-                <h2 style={{ margin: 0, color: C, fontSize: 25, fontWeight: 850, letterSpacing: "-0.6px" }}>
+                <h2 style={{ margin: 0, color: CH, fontSize: 25, fontWeight: 850, letterSpacing: "-0.6px" }}>
                   Verificación en dos pasos
                 </h2>
 
@@ -249,7 +250,7 @@ export default function LoginPage() {
                   <BotiqAvatar size={72} online />
                 </div>
 
-                <h2 style={{ margin: 0, color: C, fontSize: 25, fontWeight: 850, letterSpacing: "-0.6px" }}>
+                <h2 style={{ margin: 0, color: CH, fontSize: 25, fontWeight: 850, letterSpacing: "-0.6px" }}>
                   Iniciar sesión
                 </h2>
 

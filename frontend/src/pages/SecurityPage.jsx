@@ -4,6 +4,7 @@ import { authAPI } from "../services/api";
 import { useAuth } from "../hooks/useAuth";
 
 const C = "#272163";
+const CH = "var(--botiq-heading)"; // texto/headings: sí se adapta a modo oscuro (C se mantiene fijo por los patrones ${C}XX de alpha-transparencia)
 
 export default function SecurityPage() {
     const { user, syncUser } = useAuth();
@@ -79,7 +80,7 @@ export default function SecurityPage() {
 
         <main className="botiq-page-main">
             <header style={{ marginBottom: 24 }}>
-            <h1 style={{ color: C, fontSize: 24, margin: 0 }}>Seguridad</h1>
+            <h1 style={{ color: CH, fontSize: 24, margin: 0 }}>Seguridad</h1>
             <p style={{ color: "var(--botiq-muted)", marginTop: 6, fontSize: 13 }}>
                 Verificación en dos pasos (MFA) para tu cuenta de administrador.
             </p>
@@ -248,7 +249,7 @@ const cardStyle = {
     boxShadow: "0 1px 4px rgba(39,33,99,0.06)",
 };
 
-const sectionTitle = { color: C, fontSize: 16, margin: "0 0 6px" };
+const sectionTitle = { color: CH, fontSize: 16, margin: "0 0 6px" };
 
 const labelStyle = {
     display: "flex",
@@ -280,7 +281,7 @@ const primaryBtn = {
 
 const secondaryBtn = {
     background: "var(--botiq-surface)",
-    color: C,
+    color: CH,
     border: "1px solid var(--botiq-border)",
     borderRadius: 8,
     padding: "10px 16px",

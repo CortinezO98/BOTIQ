@@ -3,6 +3,7 @@ import Navbar from "../components/Layout/Navbar";
 import { supportAPI } from "../services/api";
 
 const C = "#272163";
+const CH = "var(--botiq-heading)"; // texto/headings: sí se adapta a modo oscuro (C se mantiene fijo por los patrones ${C}XX de alpha-transparencia)
 
 const STATUS_INFO = {
   indexed: { label: "Indexado", color: "#059669", icon: "✅" },
@@ -111,7 +112,7 @@ export default function KnowledgeBasePage() {
           style={{ marginBottom: 22, display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-end", justifyContent: "space-between" }}
         >
           <div style={{ minWidth: 0 }}>
-            <h1 style={{ color: C, fontSize: "clamp(22px, 3vw, 28px)", margin: 0, letterSpacing: "-0.5px" }}>
+            <h1 style={{ color: CH, fontSize: "clamp(22px, 3vw, 28px)", margin: 0, letterSpacing: "-0.5px" }}>
               📚 Base de conocimiento
             </h1>
             <p style={{ color: "var(--botiq-muted)", marginTop: 6, fontSize: 13, lineHeight: 1.6, maxWidth: 640 }}>
@@ -144,7 +145,7 @@ export default function KnowledgeBasePage() {
               <Kpi label="Chunks indexados" value={status?.total_chunks ?? 0} icon="📦" color="#4f46e5" />
               <Kpi label="Documentos" value={summary?.total ?? 0} icon="🗂️" />
               <Kpi label="Indexados" value={summary?.indexed ?? 0} icon="✅" color="#059669" />
-              <Kpi label="Con error" value={summary?.failed ?? 0} icon="❌" color={summary?.failed ? "#dc2626" : C} />
+              <Kpi label="Con error" value={summary?.failed ?? 0} icon="❌" color={summary?.failed ? "#dc2626" : CH} />
               <Kpi label="Carpetas Drive" value={status?.drive_folder_count ?? 0} icon="☁️" color={status?.drive_configured ? "#0284c7" : "#dc2626"} />
             </section>
 
@@ -159,7 +160,7 @@ export default function KnowledgeBasePage() {
             {/* Tabla de documentos */}
             <section className="botiq-card" style={{ padding: 0, marginTop: 16 }}>
               <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--botiq-border)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                <h2 style={{ color: C, fontSize: 15, margin: 0 }}>Documentos indexados</h2>
+                <h2 style={{ color: CH, fontSize: 15, margin: 0 }}>Documentos indexados</h2>
                 <span style={{ fontSize: 12, color: "var(--botiq-muted)" }}>
                   {summary?.total ?? 0} documento(s) · {summary?.total_chunks ?? 0} chunks
                 </span>
@@ -199,7 +200,7 @@ export default function KnowledgeBasePage() {
                                 )}
                               </td>
                               <td style={{ color: "var(--botiq-muted)", fontSize: 12 }}>{doc.doc_type || "—"}</td>
-                              <td style={{ textAlign: "center", fontWeight: 800, color: C }}>{doc.chunk_count}</td>
+                              <td style={{ textAlign: "center", fontWeight: 800, color: CH }}>{doc.chunk_count}</td>
                               <td><Badge color={st.color}>{st.icon} {st.label}</Badge></td>
                               <td style={{ color: "var(--botiq-muted)", fontSize: 12, whiteSpace: "nowrap" }}>
                                 {doc.last_indexed_at ? new Date(doc.last_indexed_at).toLocaleString() : "—"}
@@ -253,7 +254,7 @@ export default function KnowledgeBasePage() {
 
             {/* Detalle técnico */}
             <section className="botiq-card" style={{ padding: 18, marginTop: 16 }}>
-              <h2 style={{ color: C, fontSize: 14, margin: "0 0 14px" }}>Detalle técnico</h2>
+              <h2 style={{ color: CH, fontSize: 14, margin: "0 0 14px" }}>Detalle técnico</h2>
               <div style={{ display: "grid", gap: 10, color: "#374151", fontSize: 13 }}>
                 <Row label="Drive configurado" value={status?.drive_configured ? "Sí" : "No"} />
                 <Row label="Carpetas configuradas" value={String(status?.drive_folder_count ?? 0)} />
@@ -269,7 +270,7 @@ export default function KnowledgeBasePage() {
   );
 }
 
-function Kpi({ label, value, icon, color = C }) {
+function Kpi({ label, value, icon, color = CH }) {
   return (
     <article className="botiq-card" style={{ padding: "14px 16px" }}>
       <div style={{ color: "var(--botiq-muted)", fontSize: 11, fontWeight: 750, display: "flex", alignItems: "center", gap: 6 }}>
@@ -298,8 +299,8 @@ function Badge({ children, color }) {
 }
 
 const primaryBtn = { background: C, color: "#fff", border: "none", borderRadius: 12, padding: "11px 16px", cursor: "pointer", fontWeight: 850, minHeight: 44 };
-const secondaryBtn = { background: "var(--botiq-card-bg)", color: C, border: `1px solid ${C}30`, borderRadius: 12, padding: "11px 16px", cursor: "pointer", fontWeight: 800, minHeight: 44 };
-const miniBtn = { border: `1px solid ${C}25`, borderRadius: 8, background: `${C}08`, color: C, padding: "6px 12px", cursor: "pointer", fontWeight: 800, fontSize: 12 };
+const secondaryBtn = { background: "var(--botiq-card-bg)", color: CH, border: `1px solid ${C}30`, borderRadius: 12, padding: "11px 16px", cursor: "pointer", fontWeight: 800, minHeight: 44 };
+const miniBtn = { border: `1px solid ${C}25`, borderRadius: 8, background: `${C}08`, color: CH, padding: "6px 12px", cursor: "pointer", fontWeight: 800, fontSize: 12 };
 const alertStyle = { background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 14, padding: "12px 14px", marginBottom: 16, fontSize: 13 };
 const noticeOk = { background: "#eef2ff", color: "#3730a3", border: "1px solid #c7d2fe", borderRadius: 14, padding: "12px 14px", marginBottom: 16, fontSize: 13 };
 const noticeStyle = { marginTop: 16, background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e", padding: 14, borderRadius: 12, lineHeight: 1.6, fontSize: 13 };

@@ -17,6 +17,7 @@ import { dashboardAPI, supportAPI } from "../../services/api";
 import { Skeleton, SkeletonCard, SkeletonKpiRow } from "../Skeleton";
 
 const C = "#272163";
+const CH = "var(--botiq-heading)"; // texto/headings: sí se adapta a modo oscuro (C se mantiene fijo por los patrones ${C}XX de alpha-transparencia)
 const COLORS = ["#272163", "#4f46e5", "#7c3aed", "#0284c7", "#059669", "#d97706", "#dc2626"];
 
 const MOD_NAMES = {
@@ -130,7 +131,7 @@ export default function Dashboard() {
       </header>
 
       <section style={kpiGridStyle}>
-        <KPI label="Conversaciones" value={metrics.total_conversations ?? 0} icon="💬" color="#272163" />
+        <KPI label="Conversaciones" value={metrics.total_conversations ?? 0} icon="💬" color="#6d28d9" />
         <KPI label="Mensajes totales" value={metrics.total_messages ?? 0} icon="📩" color="#4f46e5" />
         <KPI label="Tokens Vertex AI" value={(metrics.total_tokens_used ?? 0).toLocaleString()} icon="⚡" color="#7c3aed" />
         <KPI
@@ -351,7 +352,7 @@ const headerStyle = {
 
 const eyebrow = {
   display: "inline-flex",
-  color: C,
+  color: CH,
   background: "rgba(39,33,99,0.08)",
   padding: "5px 10px",
   borderRadius: 999,
@@ -360,7 +361,7 @@ const eyebrow = {
   marginBottom: 10,
 };
 
-const titleStyle = { color: C, fontSize: "clamp(24px, 3vw, 34px)", margin: 0, letterSpacing: "-1px", fontWeight: 900 };
+const titleStyle = { color: CH, fontSize: "clamp(24px, 3vw, 34px)", margin: 0, letterSpacing: "-1px", fontWeight: 900 };
 const subtitleStyle = { color: "var(--botiq-muted)", fontSize: 14, margin: "6px 0 0", lineHeight: 1.5 };
 
 const toolbarStyle = {
@@ -386,7 +387,7 @@ const secondaryButton = {
   border: "1px solid #d8d6ea",
   borderRadius: 12,
   background: "var(--botiq-card-bg)",
-  color: C,
+  color: CH,
   padding: "11px 16px",
   cursor: "pointer",
   fontWeight: 800,
@@ -396,7 +397,7 @@ const selectStyle = {
   border: "1px solid #d8d6ea",
   borderRadius: 12,
   background: "var(--botiq-card-bg)",
-  color: C,
+  color: CH,
   padding: "11px 12px",
   fontWeight: 750,
   outline: "none",
@@ -437,7 +438,7 @@ const twoColBottomStyle = {
 };
 
 const cardStyle = { padding: 20, minWidth: 0, overflow: "hidden" };
-const cardTitle = { color: C, fontSize: 15, margin: "0 0 18px", fontWeight: 900 };
+const cardTitle = { color: CH, fontSize: 15, margin: "0 0 18px", fontWeight: 900 };
 const tooltipStyle = { borderRadius: 12, border: "1px solid var(--botiq-border)", boxShadow: "0 10px 24px rgba(39,33,99,0.12)", fontSize: 12 };
 
 const listRowStyle = { display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid #f0effe" };

@@ -18,6 +18,7 @@ import Navbar from "../components/Layout/Navbar";
 import { chatAPI, dashboardAPI, downloadBlob, downloadCsvFromRows } from "../services/api";
 
 const C = "#272163";
+const CH = "var(--botiq-heading)"; // texto/headings: sí se adapta a modo oscuro (C se mantiene fijo por los patrones ${C}XX de alpha-transparencia)
 const PIE_COLORS = ["#272163", "#4f46e5", "#0284c7", "#059669", "#d97706"];
 
 const MODULE_LABELS = {
@@ -106,7 +107,7 @@ export default function ReportsPage() {
           style={{ marginBottom: 22, display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-end", justifyContent: "space-between" }}
         >
           <div style={{ minWidth: 0 }}>
-            <h1 style={{ color: C, fontSize: "clamp(22px, 3vw, 28px)", margin: 0, letterSpacing: "-0.5px" }}>
+            <h1 style={{ color: CH, fontSize: "clamp(22px, 3vw, 28px)", margin: 0, letterSpacing: "-0.5px" }}>
               📈 Reportería
             </h1>
             <p style={{ color: "var(--botiq-muted)", marginTop: 6, fontSize: 13, lineHeight: 1.6, maxWidth: 640 }}>
@@ -116,7 +117,7 @@ export default function ReportsPage() {
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="botiq-form-control" style={{ minHeight: 44, borderRadius: 12, padding: "0 12px", border: "1px solid var(--botiq-border)", background: "var(--botiq-card-bg)", fontWeight: 700, color: C }}>
+            <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="botiq-form-control" style={{ minHeight: 44, borderRadius: 12, padding: "0 12px", border: "1px solid var(--botiq-border)", background: "var(--botiq-card-bg)", fontWeight: 700, color: CH }}>
               {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
             <button onClick={() => load(days)} style={secondaryBtn} disabled={loading}>
@@ -217,7 +218,7 @@ export default function ReportsPage() {
               <div style={{ display: "grid", gap: 8 }}>
                 {topFaqs.map((faq, index) => (
                   <div key={`${faq.question}-${index}`} style={{ display: "flex", gap: 10, alignItems: "center", background: "var(--botiq-surface)", border: "1px solid var(--botiq-border)", borderRadius: 10, padding: "9px 12px" }}>
-                    <span style={{ color: C, fontWeight: 900, fontSize: 13, width: 22, flexShrink: 0 }}>#{index + 1}</span>
+                    <span style={{ color: CH, fontWeight: 900, fontSize: 13, width: 22, flexShrink: 0 }}>#{index + 1}</span>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 12, color: "var(--botiq-text)", fontWeight: 650, overflowWrap: "anywhere" }}>{faq.question}</div>
                       {faq.category && <div style={{ fontSize: 10, color: "var(--botiq-muted)" }}>{faq.category}</div>}
@@ -232,7 +233,7 @@ export default function ReportsPage() {
 
         {/* Exportaciones */}
         <section className="botiq-card animate__animated animate__fadeInUp" style={{ padding: 18 }}>
-          <h3 style={{ color: C, fontSize: 14, margin: "0 0 6px" }}>⬇️ Exportar reportes</h3>
+          <h3 style={{ color: CH, fontSize: 14, margin: "0 0 6px" }}>⬇️ Exportar reportes</h3>
           <p style={{ color: "var(--botiq-muted)", fontSize: 12, margin: "0 0 14px", lineHeight: 1.6 }}>
             Descarga datos en CSV compatibles con Excel para el período seleccionado ({days} días).
             Las exportaciones de logs quedan registradas en auditoría.
@@ -259,7 +260,7 @@ export default function ReportsPage() {
 
 /* ---------- Componentes auxiliares ---------- */
 
-function Kpi({ label, value, icon, color = C, sub }) {
+function Kpi({ label, value, icon, color = CH, sub }) {
   return (
     <article className="botiq-card" style={{ padding: "14px 16px" }}>
       <div style={{ color: "var(--botiq-muted)", fontSize: 11, fontWeight: 750, display: "flex", alignItems: "center", gap: 6 }}>
@@ -275,7 +276,7 @@ function ChartCard({ title, children, onExport, scroll = false }) {
   return (
     <article className="botiq-card animate__animated animate__fadeInUp" style={{ padding: 16, display: "flex", flexDirection: "column", minWidth: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <h3 style={{ color: C, fontSize: 14, margin: 0 }}>{title}</h3>
+        <h3 style={{ color: CH, fontSize: 14, margin: 0 }}>{title}</h3>
         {onExport && (
           <button onClick={onExport} title="Exportar CSV" style={miniBtn}>CSV ⬇️</button>
         )}
@@ -327,7 +328,7 @@ const secondaryBtn = {
   border: `1px solid ${C}30`,
   borderRadius: 12,
   background: "var(--botiq-card-bg)",
-  color: C,
+  color: CH,
   padding: "11px 16px",
   cursor: "pointer",
   fontWeight: 800,
@@ -338,7 +339,7 @@ const miniBtn = {
   border: `1px solid ${C}25`,
   borderRadius: 8,
   background: `${C}08`,
-  color: C,
+  color: CH,
   padding: "5px 10px",
   cursor: "pointer",
   fontWeight: 800,

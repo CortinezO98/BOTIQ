@@ -5,6 +5,7 @@ import BotiqAvatar from "../components/Brand/BotiqAvatar";
 import { chatAPI, downloadBlob } from "../services/api";
 
 const C = "#272163";
+const CH = "var(--botiq-heading)"; // texto/headings: sí se adapta a modo oscuro (C se mantiene fijo por los patrones ${C}XX de alpha-transparencia)
 
 const STATUS_LABELS = {
   active: { label: "Activa", color: "#059669" },
@@ -90,7 +91,7 @@ export default function ConversationLogsPage() {
           style={{ marginBottom: 22, display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-end", justifyContent: "space-between" }}
         >
           <div style={{ minWidth: 0 }}>
-            <h1 style={{ color: C, fontSize: "clamp(22px, 3vw, 28px)", margin: 0, letterSpacing: "-0.5px" }}>
+            <h1 style={{ color: CH, fontSize: "clamp(22px, 3vw, 28px)", margin: 0, letterSpacing: "-0.5px" }}>
               🧾 Logs de conversaciones
             </h1>
             <p style={{ color: "var(--botiq-muted)", marginTop: 6, fontSize: 13, lineHeight: 1.6, maxWidth: 640 }}>
@@ -224,12 +225,12 @@ function LogRow({ item, onOpen }) {
         {item.created_at ? new Date(item.created_at).toLocaleString() : "N/A"}
       </td>
       <td>
-        <div style={{ fontWeight: 750, color: C, fontSize: 13 }}>{item.user_full_name || "Usuario"}</div>
+        <div style={{ fontWeight: 750, color: CH, fontSize: 13 }}>{item.user_full_name || "Usuario"}</div>
         <div style={{ color: "var(--botiq-muted)", fontSize: 11 }}>{item.user_email}</div>
       </td>
       <td><Badge color={pf.color}>{pf.icon} {pf.label}</Badge></td>
       <td><Badge color={st.color}>{st.label}</Badge></td>
-      <td style={{ textAlign: "center", fontWeight: 800, color: C }}>{item.question_count ?? 0}</td>
+      <td style={{ textAlign: "center", fontWeight: 800, color: CH }}>{item.question_count ?? 0}</td>
       <td style={{ maxWidth: 260 }}>
         <span style={{ color: "#374151", fontSize: 12, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {item.last_message || "—"}
@@ -271,7 +272,7 @@ function LogCard({ item, onOpen }) {
         {item.aranda_ticket_id && <Badge color="#059669">🎫 {item.aranda_ticket_id}</Badge>}
       </div>
 
-      <h3 style={{ color: C, fontSize: 14, marginBottom: 4, overflowWrap: "anywhere" }}>
+      <h3 style={{ color: CH, fontSize: 14, marginBottom: 4, overflowWrap: "anywhere" }}>
         {item.user_full_name || "Usuario"}
       </h3>
       <p style={{ color: "var(--botiq-muted)", fontSize: 11, marginBottom: 8 }}>{item.user_email}</p>
@@ -358,7 +359,7 @@ function ConversationModal({ item, onClose }) {
             </div>
 
             <p style={{ fontSize: 13, color: "var(--botiq-text)", lineHeight: 1.7, margin: 0 }}>
-              <strong style={{ color: C }}>Resumen:</strong> {summary}
+              <strong style={{ color: CH }}>Resumen:</strong> {summary}
             </p>
 
             <div className="botiq-summary-stats">
@@ -372,7 +373,7 @@ function ConversationModal({ item, onClose }) {
           </section>
 
           {/* Conversación completa */}
-          <h4 style={{ color: C, fontSize: 13, margin: "0 0 10px", textTransform: "uppercase", letterSpacing: ".4px" }}>
+          <h4 style={{ color: CH, fontSize: 13, margin: "0 0 10px", textTransform: "uppercase", letterSpacing: ".4px" }}>
             💬 Conversación completa
           </h4>
 
@@ -458,7 +459,7 @@ function buildSummary(item, messages) {
 
 /* ---------- Componentes auxiliares ---------- */
 
-function Metric({ label, value, color = C, icon }) {
+function Metric({ label, value, color = CH, icon }) {
   return (
     <article className="botiq-card" style={{ padding: "14px 16px" }}>
       <div style={{ color: "var(--botiq-muted)", fontSize: 11, fontWeight: 750, display: "flex", alignItems: "center", gap: 6 }}>
@@ -473,7 +474,7 @@ function SummaryStat({ label, value }) {
   return (
     <div style={{ background: "var(--botiq-card-bg)", border: "1px solid var(--botiq-border)", borderRadius: 10, padding: "8px 10px", minWidth: 0 }}>
       <div style={{ color: "var(--botiq-muted)", fontSize: 10, fontWeight: 750, textTransform: "uppercase", letterSpacing: ".3px" }}>{label}</div>
-      <div style={{ color: C, fontSize: 12, fontWeight: 800, marginTop: 2, overflowWrap: "anywhere" }}>{value}</div>
+      <div style={{ color: CH, fontSize: 12, fontWeight: 800, marginTop: 2, overflowWrap: "anywhere" }}>{value}</div>
     </div>
   );
 }
@@ -518,7 +519,7 @@ const exportBtn = {
   border: `1px solid ${C}30`,
   borderRadius: 12,
   background: "var(--botiq-card-bg)",
-  color: C,
+  color: CH,
   padding: "11px 18px",
   cursor: "pointer",
   fontWeight: 850,
@@ -530,7 +531,7 @@ const viewBtn = {
   border: `1px solid ${C}25`,
   borderRadius: 10,
   background: `${C}08`,
-  color: C,
+  color: CH,
   padding: "7px 14px",
   cursor: "pointer",
   fontWeight: 800,

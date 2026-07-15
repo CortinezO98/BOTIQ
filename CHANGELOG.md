@@ -6,6 +6,27 @@ Versionamiento basado en [SemVer](https://semver.org/lang/es/).
 
 ---
 
+## [1.17.0] — 2026-07-15
+
+Corrección de un bug de sesión real, reportado en producción: 401 en cascada (incluido `/auth/me` y `/auth/refresh`) con sesión activa legítima, al navegar rápido entre varias pantallas del dashboard.
+
+### Corregido
+- **Condición de carrera en la rotación del refresh token**: la rotación revocaba el token usado de forma inmediata. Cuando varias peticiones llegaban casi al mismo tiempo con la misma cookie de refresh todavía no actualizada (múltiples llamadas paralelas del frontend al cargar el dashboard, o varias pestañas del navegador), la primera rotaba el token con éxito y todas las demás quedaban rechazadas con 401 — aunque la sesión fuera legítima. El fix tiene dos partes, ambas necesarias (verificado deshabilitando cada una por separado):
+  - **Bloqueo de fila** (`SELECT ... FOR UPDATE`) en `/auth/refresh`: sin esto, dos peticiones concurrentes leen la fila del token antes de que cualquiera escriba, así que ninguna se entera de que la otra ya actuó.
+  - **Período de gracia** (`rotated_at`, nueva columna, separada de `revoked_at`): un token recién rotado se sigue aceptando por `REFRESH_TOKEN_GRACE_SECONDS` (default 15s), absorbiendo la ráfaga de peticiones concurrentes. `revoked_at` (logout explícito) sigue siendo inmediato, sin excepciones — verificado con un test dedicado.
+- `tests/test_refresh_grace_period.py` (nuevo): reproduce el escenario exacto reportado (dos "pestañas" con la misma cookie vieja, en simultáneo, contra Postgres real), confirma que el reuso pasado el período de gracia sigue siendo rechazado, y confirma que logout no se ve afectado por la gracia.
+- `tests/test_auth_session.py::test_refresh_rotates_token_and_invalidates_previous_one` actualizado: el comportamiento esperado cambió intencionalmente (reuso inmediato ahora es válido dentro de la gracia; el caso "reuso rechazado" se cubre en el archivo nuevo).
+
+### Agregado
+- `REFRESH_TOKEN_GRACE_SECONDS` en `config.py` (default 15).
+- Migración `20260715_0010`: columna `rotated_at` en `refresh_tokens`.
+
+### Notas de auditoría
+- Encontrado por un reporte real de usuario (401 en cascada con sesión activa), no por auditoría proactiva — confirma el valor de seguir escribiendo tests de regresión con datos reales cuando aparece un bug de producción, en vez de solo parchear y seguir.
+- El bug NO estaba relacionado con los cambios de UX/modo oscuro de la versión anterior — coincidencia de timing (apareció al hacer pruebas manuales extensas navegando entre muchas pantallas).
+
+---
+
 ## [1.16.0] — 2026-07-15
 
 Modo oscuro (activado, no solo variables preparadas) + skeleton loaders. Cierra los dos últimos ítems de la tabla UX/UI de la auditoría original.

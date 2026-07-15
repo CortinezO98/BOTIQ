@@ -7,6 +7,7 @@
 
 :root {
   --botiq-primary: #272163;
+  --botiq-heading: #272163;
   --botiq-primary-dark: #1a1645;
   --botiq-primary-light: #3a3490;
   --botiq-accent: #4f46e5;
@@ -61,23 +62,25 @@
  * lógica propia de tema, siempre que use var(--botiq-*)/var(--clay-*) en
  * vez de colores literales.
  *
- * Decisión de diseño: los colores de MARCA (--botiq-primary y variantes,
- * badges de estado success/warning/danger/info) se mantienen iguales en
- * ambos temas -- solo cambian superficie, borde y texto neutro. Es un
- * recorte de alcance consciente: texto blanco fijo sobre botones con
- * degradado de color (const C = "#272163" hardcodeado por archivo) queda
- * igual en los dos temas porque esos botones no cambian de color.
+ * Decisión de diseño: el morado de marca (--botiq-primary, #272163) se
+ * mantiene igual en los dos temas cuando se usa como FONDO/acento sólido
+ * (botones primarios, badges), porque muchos componentes lo concatenan
+ * como `${C}25` para tintes translúcidos -- una variable CSS no soporta
+ * ese sufijo de alpha. Pero --botiq-heading SÍ cambia: se usa para texto
+ * (títulos, headings) que antes usaba el mismo morado fijo y quedaba casi
+ * ilegible sobre fondos oscuros.
  */
 [data-theme="dark"] {
-  --botiq-surface: #16132f;
-  --botiq-card-bg: #1f1b47;
-  --botiq-border: #322d5c;
-  --botiq-text: #e8e7f5;
-  --botiq-muted: #a19dc9;
+  --botiq-surface: #1e1b3a;
+  --botiq-card-bg: #2a2652;
+  --botiq-border: #3d3870;
+  --botiq-text: #e4e2f2;
+  --botiq-muted: #a8a4c9;
+  --botiq-heading: #b8ace8;
   --botiq-shadow: 0 18px 46px rgba(0, 0, 0, 0.35);
 
-  --clay-bg: linear-gradient(145deg, #241f56, #1a1640);
-  --clay-bg-flat: #211d4d;
+  --clay-bg: linear-gradient(145deg, #2d2960, #23204a);
+  --clay-bg-flat: #292552;
   --clay-shadow-light: var(--clay-shadow-light-dark);
   --clay-shadow-dark: var(--clay-shadow-dark-dark);
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { chatAPI } from "../../services/api";
 
-const C = "#272163";
+const CH = "var(--botiq-heading)"; // texto/headings: sí se adapta a modo oscuro (C se mantiene fijo por los patrones ${C}XX de alpha-transparencia)
 
 export default function ChatHistory({ onSelect }) {
   const [items, setItems] = useState([]);
@@ -26,7 +26,7 @@ export default function ChatHistory({ onSelect }) {
   return (
     <aside className="botiq-chat-history" style={{ background: "var(--botiq-card-bg)", borderRight: "1px solid var(--botiq-border)", minHeight: "calc(100vh - 58px)", padding: 16, overflowY: "auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <h3 style={{ color: C, fontSize: 14, margin: 0 }}>Historial</h3>
+        <h3 style={{ color: CH, fontSize: 14, margin: 0 }}>Historial</h3>
         <button onClick={load} style={smallBtn}>↻</button>
       </div>
 
@@ -39,7 +39,7 @@ export default function ChatHistory({ onSelect }) {
           {items.map((c) => (
             <button key={c.id} onClick={() => onSelect?.(c)} style={itemBtn}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                <span style={{ color: C, fontSize: 12, fontWeight: 800 }}>
+                <span style={{ color: CH, fontSize: 12, fontWeight: 800 }}>
                   {c.selected_profile === "support_engineer" ? "Soporte" : "Empleado"}
                 </span>
                 <span style={{ fontSize: 10, color: statusColor(c.session_status), fontWeight: 700 }}>
@@ -80,7 +80,7 @@ function statusColor(status) {
 
 function Tag({ children, danger = false, ok = false, warn = false }) {
   let background = "var(--botiq-surface)";
-  let color = C;
+  let color = CH;
   let border = "var(--botiq-border)";
 
   if (danger) {
@@ -113,7 +113,7 @@ const muted = { color: "var(--botiq-muted)", fontSize: 12, lineHeight: 1.5 };
 const smallBtn = {
   border: "1px solid var(--botiq-border)",
   background: "var(--botiq-surface)",
-  color: C,
+  color: CH,
   width: 28,
   height: 28,
   borderRadius: 8,
