@@ -3,7 +3,7 @@ import AppShell from "../components/Layout/AppShell";
 import { useAuth } from "../hooks/useAuth";
 
 const C = "#272163";
-const CH = "var(--botiq-heading)"; // texto/headings: sí se adapta a modo oscuro (C se mantiene fijo por los patrones ${C}XX de alpha-transparencia)
+const CH = "var(--botiq-heading)";
 
 export default function ChatPage() {
   const { user, isSupport } = useAuth();
@@ -51,7 +51,13 @@ export default function ChatPage() {
             zIndex: 1,
           }}
         >
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              marginBottom: 20,
+            }}
+          >
             <BotiqAvatar size={86} color={C} online />
           </div>
 
@@ -107,14 +113,29 @@ export default function ChatPage() {
                 maxWidth: 560,
               }}
             >
-              <p style={{ fontSize: 12, color: CH, fontWeight: 750, margin: 0, lineHeight: 1.6 }}>
-                🔧 Modo Ingeniero de Soporte — acceso a RAG, base de conocimiento,
-                validación de usuario de red y análisis de servidores.
+              <p
+                style={{
+                  fontSize: 12,
+                  color: CH,
+                  fontWeight: 750,
+                  margin: 0,
+                  lineHeight: 1.6,
+                }}
+              >
+                🔧 Modo Ingeniero de Soporte — acceso a RAG, base de
+                conocimiento, validación de usuario de red y análisis de
+                servidores.
               </p>
             </div>
           )}
 
-          <p style={{ color: "var(--botiq-muted)", fontSize: 12, marginTop: 22 }}>
+          <p
+            style={{
+              color: "var(--botiq-muted)",
+              fontSize: 12,
+              marginTop: 22,
+            }}
+          >
             Usa el botón flotante inferior derecho para iniciar una conversación.
           </p>
         </section>

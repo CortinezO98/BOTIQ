@@ -1,5 +1,4 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { ToastProvider } from "./components/UI/ToastProvider";
 
 import ChatWidget from "./components/ChatWidget";
 import ChatPage from "./pages/ChatPage";
@@ -21,12 +20,7 @@ const C = "#272163";
 function Guard({ children, adminOnly = false, showFloatingChat = true }) {
   const { user, checkingSession } = useAuth();
 
-  if (checkingSession) {
-    // Todavía no sabemos si hay sesión (esperando /auth/me). No redirigir
-    // todavía: eso causaría un parpadeo a /login incluso con sesión válida.
-    return null;
-  }
-
+  if (checkingSession) return null;
   if (!user) return <Navigate to="/login" replace />;
 
   if (adminOnly && user.role !== "admin") {
@@ -36,7 +30,9 @@ function Guard({ children, adminOnly = false, showFloatingChat = true }) {
   return (
     <>
       {children}
-      {showFloatingChat && <ChatWidget primaryColor={C} position="bottom-right" />}
+      {showFloatingChat && (
+        <ChatWidget primaryColor={C} position="bottom-right" />
+      )}
     </>
   );
 }
@@ -46,15 +42,78 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
 
-      <Route path="/chat" element={<Guard><ChatPage /></Guard>} />
-      <Route path="/dashboard" element={<Guard adminOnly><DashboardPage /></Guard>} />
-      <Route path="/dashboard/users" element={<Guard adminOnly><UsersPage /></Guard>} />
-      <Route path="/dashboard/faqs" element={<Guard adminOnly><FaqsPage /></Guard>} />
-      <Route path="/dashboard/knowledge-base" element={<Guard adminOnly><KnowledgeBasePage /></Guard>} />
-      <Route path="/dashboard/conversation-logs" element={<Guard adminOnly><ConversationLogsPage /></Guard>} />
-      <Route path="/dashboard/reports" element={<Guard adminOnly><ReportsPage /></Guard>} />
-      <Route path="/dashboard/governance" element={<Guard adminOnly><GovernancePage /></Guard>} />
-      <Route path="/dashboard/security" element={<Guard adminOnly showFloatingChat={false}><SecurityPage /></Guard>} />
+      <Route
+        path="/chat"
+        element={
+          <Guard>
+            <ChatPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/dashboard"
+        element={
+          <Guard adminOnly>
+            <DashboardPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/dashboard/users"
+        element={
+          <Guard adminOnly>
+            <UsersPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/dashboard/faqs"
+        element={
+          <Guard adminOnly>
+            <FaqsPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/dashboard/knowledge-base"
+        element={
+          <Guard adminOnly>
+            <KnowledgeBasePage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/dashboard/conversation-logs"
+        element={
+          <Guard adminOnly>
+            <ConversationLogsPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/dashboard/reports"
+        element={
+          <Guard adminOnly>
+            <ReportsPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/dashboard/governance"
+        element={
+          <Guard adminOnly>
+            <GovernancePage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/dashboard/security"
+        element={
+          <Guard adminOnly showFloatingChat={false}>
+            <SecurityPage />
+          </Guard>
+        }
+      />
 
       <Route path="*" element={<Navigate to="/chat" replace />} />
     </Routes>
@@ -66,11 +125,9 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <SidebarProvider>
-          <ToastProvider>
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
-          </ToastProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
         </SidebarProvider>
       </AuthProvider>
     </ThemeProvider>
