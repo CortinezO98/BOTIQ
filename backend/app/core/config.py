@@ -11,7 +11,7 @@ _DEV_SECRET_KEY = "dev-secret-change-in-production-32chars!!"
 
 class Settings(BaseSettings):
     APP_NAME: str = "BOTIQ"
-    APP_VERSION: str = "1.13.0"
+    APP_VERSION: str = "1.17.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
@@ -130,12 +130,33 @@ class Settings(BaseSettings):
     SERVER_DASHBOARD_API_KEY: str = ""
 
     # Integración Aranda.
-    # Si ARANDA_API_URL está vacío, BOTIQ no crea ticket real y deja el caso marcado como elegible.
-    ARANDA_API_URL: str = ""
-    ARANDA_API_KEY: str = ""
+    # ── Integración Aranda SERVICE DESK (ASDK) ──────────────────────────────
+    # El API real de ASDK NO usa una API key estática: se autentica con
+    # usuario/contraseña contra /user/login, que devuelve un sessionId (token)
+    # de sesión. Ese token se manda como header "Authorization: {token}" (sin
+    # prefijo "Bearer") en cada llamada posterior, y expira -- hay que
+    # renovarlo (/session/renew) o volver a loguearse si una llamada falla
+    # por sesión inválida. Ver app/services/aranda_service.py.
+    #
+    # Si ARANDA_BASE_URL está vacío, BOTIQ no crea ticket real y deja el caso
+    # marcado como elegible ("pending_configuration").
+    ARANDA_BASE_URL: str = ""
+    ARANDA_API_VERSION: str = "v8.6"
+    ARANDA_USERNAME: str = ""
+    ARANDA_PASSWORD: str = ""
+
+    # Campos obligatorios para crear un caso (item/add) que no tienen un
+    # valor dinámico natural desde la conversación de BOTIQ -- se configuran
+    # una vez según cómo esté armado el proyecto de Aranda del cliente.
+    ARANDA_AUTHOR_ID: str = ""       # Usuario (de Aranda) que queda como autor de los casos creados por BOTIQ.
+    ARANDA_GROUP_ID: str = ""        # Grupo de especialistas que atiende los casos.
+    ARANDA_SLA_ID: str = ""          # SLA aplicado a los casos creados por BOTIQ.
     ARANDA_PROJECT_ID: str = ""
     ARANDA_CATEGORY_ID: str = ""
     ARANDA_SERVICE_ID: str = ""
+    ARANDA_REGISTRY_TYPE_ID: str = ""  # Medio de registro (ej. "Web", "Chatbot" si existe esa opción en el proyecto).
+    ARANDA_ITEM_TYPE: int = 1        # 1=Incidente, 2=Problema, 3=Cambio, 4=Requerimiento de servicio.
+
     ARANDA_TIMEOUT_SECONDS: int = 15
 
     # Controles de consumo y seguridad conversacional.
