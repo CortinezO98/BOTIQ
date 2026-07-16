@@ -102,7 +102,7 @@ export const chatAPI = {
     form.append("message", message || "");
     form.append("session_id", sessionId);
     if (imageFile) form.append("image", imageFile);
-    return api.post("/chat/message", form, {
+    return api.post("/chat/message-smart", form, {
       headers: { "Content-Type": "multipart/form-data" },
       timeout: 60000,
     });

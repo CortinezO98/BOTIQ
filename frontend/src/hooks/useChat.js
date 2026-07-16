@@ -81,6 +81,7 @@ export function useChat() {
         hasImage: data.has_image_analysis,
         knowledgeGap: data.knowledge_gap,
         answerSource: data.answer_source,
+        ticketTracking: data.ticket_tracking,
         applicationStatus: data.application_status,
         ticketEligible: data.ticket_eligible,
         arandaTicketId: data.aranda_ticket_id,
@@ -146,6 +147,7 @@ export function useChat() {
           system: msg.role === "system",
           ...msg.metadata_,
           answerSource: msg.metadata_?.answer_source,
+          ticketTracking: msg.metadata_?.ticket_tracking,
         },
         ts: new Date(msg.created_at),
       }));

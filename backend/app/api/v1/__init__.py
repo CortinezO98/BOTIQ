@@ -1,10 +1,11 @@
 from fastapi import APIRouter
 
-from app.api.v1.routes import admin, auth, chat, dashboard, employees, feedback, incidents, servers, support
+from app.api.v1.routes import admin, auth, chat, chat_smart, dashboard, employees, feedback, incidents, servers, support
 
 router = APIRouter()
 router.include_router(auth.router, prefix="/auth", tags=["Autenticación"])
 router.include_router(chat.router, prefix="/chat", tags=["Chat"])
+router.include_router(chat_smart.router, prefix="/chat", tags=["Chat / Seguimiento Aranda"])
 router.include_router(employees.router, prefix="/employees", tags=["Empleados / FAQs"])
 router.include_router(support.router, prefix="/support", tags=["Soporte RAG"])
 router.include_router(servers.router, prefix="/servers", tags=["Servidores"])

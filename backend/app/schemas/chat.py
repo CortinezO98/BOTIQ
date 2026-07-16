@@ -45,6 +45,9 @@ class ChatMessageResponse(BaseModel):
     # confirmaciones de ticket, etc.). Calculado en chat.py a partir de los
     # flags que ya existían en bot_result, antes solo persistidos en DB.
     answer_source: Optional[str] = None
+    # Resumen seguro del seguimiento Aranda. Nunca contiene sessionId, credenciales,
+    # URLs temporales de adjuntos ni notas privadas filtradas.
+    ticket_tracking: Optional[Dict[str, Any]] = None
 
 
 class ConversationItem(BaseModel):

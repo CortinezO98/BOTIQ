@@ -221,28 +221,43 @@ class ConversationFlowService:
         explicit_request: bool = False,
     ) -> tuple[bool, str]:
         """
-        Regla estricta para no llenar Aranda:
-        - Debe existir solicitud explícita o confirmación de ticket.
-        - Deben existir datos mínimos del caso.
-        - Debe haber intentos de resolución suficientes, excepto errores críticos 5xx con app/URL.
+        Regla estricta de última instancia para no llenar Aranda:
+        - Debe existir confirmación explícita del usuario.
+        - Deben existir los datos mínimos del caso.
+        - BOTIQ debe haber agotado los intentos mínimos de solución.
+        - La conversación debe estar marcada como no resuelta/elegible.
+        - No existe bypass automático para errores 5xx.
         """
-        if conversation.escalated_to_aranda and conversation.aranda_ticket_id:
-            return False, f"Ya existe un ticket asociado a esta conversación: {conversation.aranda_ticket_id}"
+        if conversation.escalated_to_aranda or conversation.aranda_ticket_id:
+            return False, (
+                "Ya existe un ticket asociado a esta conversación: "
+                f"{conversation.aranda_ticket_id or 'registrado'}"
+            )
 
         if not explicit_request:
             return False, "Para crear el ticket necesito tu confirmación explícita."
 
         slots = decision.slots or {}
-        error_code = str(slots.get("error_code") or "")
-        critical_error = error_code in {"500", "501", "502", "503", "504"}
-
-        has_target = bool(slots.get("app_or_url") or slots.get("url") or slots.get("ip"))
-        has_problem = bool(slots.get("error_or_symptom") or slots.get("error_code"))
-        has_scope = bool(slots.get("affected_scope")) or decision.case_type not in {"app_down", "access_issue"}
+        has_target = bool(
+            slots.get("app_or_url")
+            or slots.get("url")
+            or slots.get("ip")
+            or slots.get("device_or_service")
+            or slots.get("topic")
+        )
+        has_problem = bool(
+            slots.get("error_or_symptom")
+            or slots.get("error_code")
+            or slots.get("evidence")
+        )
+        has_scope = bool(slots.get("affected_scope")) or decision.case_type not in {
+            "app_down",
+            "access_issue",
+        }
 
         missing = []
         if not has_target:
-            missing.append("aplicativo, URL o IP")
+            missing.append("aplicativo, URL, IP, equipo o servicio afectado")
         if not has_problem:
             missing.append("error o síntoma exacto")
         if not has_scope:
@@ -251,34 +266,58 @@ class ConversationFlowService:
         if missing:
             return (
                 False,
-                "Antes de crear el ticket necesito completar estos datos para no generar solicitudes incompletas en Aranda:\n"
-                + "\n".join(f"- {m}" for m in missing)
+                "Antes de crear el ticket necesito completar estos datos para no generar "
+                "solicitudes incompletas en Aranda:\n"
+                + "\n".join(f"- {item}" for item in missing),
             )
 
-        attempts = conversation.resolution_attempts or 0
-        min_attempts = settings.MIN_RESOLUTION_ATTEMPTS_BEFORE_TICKET
-
-        if critical_error and has_target and has_problem:
-            return True, "Error crítico con datos mínimos completos."
-
+        attempts = int(conversation.resolution_attempts or 0)
+        min_attempts = max(1, int(settings.MIN_RESOLUTION_ATTEMPTS_BEFORE_TICKET))
         if attempts < min_attempts:
             return (
                 False,
                 f"Antes de crear un ticket debemos agotar al menos {min_attempts} validaciones. "
-                "Primero validaré base de conocimiento, estado del aplicativo/servidor y pasos básicos de solución."
+                "Primero revisaré FAQ/base de conocimiento, estado del aplicativo o servidor "
+                "y los pasos básicos de solución.",
             )
 
-        return True, "Validaciones mínimas agotadas."
+        if not bool(conversation.ticket_eligible):
+            return (
+                False,
+                "La conversación todavía no ha sido marcada como no resuelta. "
+                "El ticket solo se crea como última instancia.",
+            )
 
-    def should_offer_ticket(self, conversation: Conversation, decision: FlowDecision, app_status: Optional[Dict[str, Any]] = None) -> bool:
+        return True, "Validaciones agotadas, caso no resuelto y confirmación recibida."
+
+    def should_offer_ticket(
+        self,
+        conversation: Conversation,
+        decision: FlowDecision,
+        app_status: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """
+        Solo ofrece Aranda cuando el flujo de solución ya fue agotado.
+
+        Un estado crítico o un HTTP 5xx aumenta la severidad del caso, pero no
+        adelanta el ticket ni evita las validaciones mínimas.
+        """
         slots = decision.slots or {}
-        error_code = str(slots.get("error_code") or "")
-        state = str((app_status or {}).get("status") or "").lower()
-        critical_status = state in {"down", "failed", "error", "critical", "offline"}
-        critical_error = error_code in {"500", "501", "502", "503", "504"}
+        has_target = bool(
+            slots.get("app_or_url")
+            or slots.get("url")
+            or slots.get("ip")
+            or slots.get("device_or_service")
+            or slots.get("topic")
+        )
+        attempts = int(conversation.resolution_attempts or 0)
+        min_attempts = max(1, int(settings.MIN_RESOLUTION_ATTEMPTS_BEFORE_TICKET))
         return bool(
-            (critical_status or critical_error or conversation.ticket_eligible)
-            and (slots.get("app_or_url") or slots.get("url") or slots.get("ip"))
+            conversation.ticket_eligible
+            and attempts >= min_attempts
+            and has_target
+            and not conversation.escalated_to_aranda
+            and not conversation.aranda_ticket_id
         )
 
     def build_ticket_offer_message(self, decision: FlowDecision) -> str:
