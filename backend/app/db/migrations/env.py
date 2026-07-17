@@ -19,6 +19,7 @@ from app.models.network_user import NetworkUser
 from app.models.server_log import ServerLog
 from app.models.user import User
 from app.models.web_knowledge_cache import WebKnowledgeCache
+from app.models.server_knowledge_document import ServerKnowledgeDocument  
 
 config = context.config
 sync_url = settings.DATABASE_URL.replace("+asyncpg", "")

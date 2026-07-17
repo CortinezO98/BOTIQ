@@ -17,20 +17,21 @@ PASO 2: Habilitar las APIs en Google Cloud
       • Vertex AI API
       • (Opcional, PDFs escaneados) Document AI API
 
-PASO 3: Compartir la carpeta de Drive con el Service Account
-  - Abre la carpeta "Bot Soporte" en Drive
-  - Compartir → agrega el email del Service Account
-    (ej: botiq-backend@TU_PROYECTO.iam.gserviceaccount.com)
-  - Permiso: Lector. Compartir.
-  - IMPORTANTE: comparte la carpeta PADRE; las subcarpetas se heredan
-    y este servicio las recorre de forma recursiva.
+PASO 3: Compartir con el Service Account
+  - Carpeta completa: Compartir → email del service account → Lector.
+    Las subcarpetas se heredan y se recorren de forma recursiva.
+  - Archivo suelto (sin carpeta): igual, Compartir → email del service
+    account → Lector, directo sobre el archivo.
 
-PASO 4: Obtener el ID de la carpeta
-  - URL: drive.google.com/drive/folders/ESTE_ES_EL_ID
-  - Pega ese ID en GDRIVE_FOLDER_ID del .env
+PASO 4: Obtener el ID
+  - Carpeta:  drive.google.com/drive/folders/ESTE_ES_EL_ID
+  - Archivo:  docs.google.com/spreadsheets/d/ESTE_ES_EL_ID/edit (o /document/d/, etc.)
+  - Carpeta → GDRIVE_FOLDER_ID / GDRIVE_SERVERS_FOLDER_ID en .env
+  - Archivo suelto → GDRIVE_SERVERS_FILE_ID en .env
 
 PASO 5: Sincronizar
-  - POST /api/v1/support/sync-knowledge-base (rol support_engineer o admin)
+  - Soporte:    POST /api/v1/support/sync-knowledge-base
+  - Servidores: POST /api/v1/servers-kb/sync-knowledge-base
 
 TIPOS DE ARCHIVO SOPORTADOS:
   ✅ Google Docs        → exportado como texto plano
@@ -40,6 +41,15 @@ TIPOS DE ARCHIVO SOPORTADOS:
   ✅ .pdf digital       → extracción automática
   ✅ .pdf escaneado     → requiere Document AI (DOCUMENT_AI_PROCESSOR_ID)
   ⚠️ .docx              → soporte básico (texto plano)
+
+NOTA: este servicio es genérico -- no está atado a una sola base de
+conocimiento. Cada método acepta `folder_ids` y `file_ids` opcionales; si no
+se pasan, usa por compatibilidad las carpetas de soporte
+(settings.get_gdrive_folder_ids()). El módulo de servidores
+(app/modules/servers_kb/service.py) pasa explícitamente
+settings.get_servers_folder_ids() + settings.get_servers_file_ids().
+Un mismo documento puede llegar por carpeta recorrida recursivamente, por ID
+directo, o por ambas fuentes a la vez -- se deduplica siempre por file_id.
 ═══════════════════════════════════════════════════════════
 """
 
@@ -73,8 +83,6 @@ class GoogleDriveService:
         if self._service is None:
             import os
 
-            if not settings.get_gdrive_folder_ids():
-                raise RuntimeError("No hay carpetas configuradas (GDRIVE_FOLDER_ID / GDRIVE_FOLDER_IDS) en .env")
             if not settings.GOOGLE_APPLICATION_CREDENTIALS:
                 raise RuntimeError("GOOGLE_APPLICATION_CREDENTIALS no configurado en .env")
             if not os.path.exists(settings.GOOGLE_APPLICATION_CREDENTIALS):
@@ -118,24 +126,50 @@ class GoogleDriveService:
                 break
         return files
 
-    async def list_documents(self) -> List[Dict]:
+    def _get_file_raw(self, file_id: str) -> Optional[Dict]:
+        """Obtiene metadata de un archivo suelto por su ID directo."""
+        service = self._get_service()
+        try:
+            return (
+                service.files()
+                .get(
+                    fileId=file_id,
+                    fields="id, name, mimeType, modifiedTime, size",
+                    supportsAllDrives=True,
+                )
+                .execute()
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"❌ Google Drive error al obtener archivo {file_id}: {e}")
+            return None
+
+    async def list_documents(
+        self,
+        folder_ids: Optional[List[str]] = None,
+        file_ids: Optional[List[str]] = None,
+    ) -> List[Dict]:
         """
-        Lista todos los archivos soportados, recorriendo de forma recursiva
-        cada carpeta raíz configurada (GDRIVE_FOLDER_ID + GDRIVE_FOLDER_IDS).
-        Deduplica carpetas y archivos para que el solapamiento entre una raíz
-        y sus subcarpetas no genere indexación doble.
+        Lista todos los archivos soportados:
+        - Recorriendo de forma recursiva cada carpeta raíz en `folder_ids`.
+        - Sumando cada archivo suelto listado explícitamente en `file_ids`.
+        Si ninguno de los dos se pasa, usa por compatibilidad las carpetas de
+        soporte configuradas (settings.get_gdrive_folder_ids()). Deduplica
+        por file_id sin importar de qué fuente vino cada documento.
         """
-        roots = settings.get_gdrive_folder_ids()
-        if not roots:
-            print("⚠️  No hay carpetas configuradas (GDRIVE_FOLDER_ID / GDRIVE_FOLDER_IDS) — RAG sin documentos")
+        roots = folder_ids if folder_ids is not None else settings.get_gdrive_folder_ids()
+        explicit_files = file_ids or []
+
+        if not roots and not explicit_files:
+            print("⚠️  No hay carpetas ni archivos configurados para esta base de conocimiento")
             return []
+
         try:
             supported: List[Dict] = []
             seen_files = set()        # file_id ya agregados
             visited = set()           # carpetas ya recorridas
-            # Recorrido por amplitud sobre todas las raíces (evita recursión profunda).
-            pending = list(roots)
 
+            # 1) Carpetas, recorrido recursivo por amplitud.
+            pending = list(roots)
             while pending:
                 folder_id = pending.pop(0)
                 if folder_id in visited:
@@ -150,9 +184,23 @@ class GoogleDriveService:
                         seen_files.add(f["id"])
                         supported.append(f)
 
+            # 2) Archivos sueltos por ID directo (sin pasar por ninguna carpeta).
+            for file_id in explicit_files:
+                if file_id in seen_files:
+                    continue  # ya vino por alguna carpeta -- evita duplicado
+                meta = self._get_file_raw(file_id)
+                if not meta:
+                    continue
+                mime = meta.get("mimeType")
+                if mime in self.SUPPORTED_MIME_TYPES:
+                    seen_files.add(file_id)
+                    supported.append(meta)
+                else:
+                    print(f"⚠️  Archivo {file_id} ({meta.get('name')}) tiene un tipo no soportado: {mime}")
+
             print(
                 f"📁 Google Drive: {len(supported)} documentos soportados "
-                f"en {len(visited)} carpeta(s), a partir de {len(roots)} raíz(es)"
+                f"({len(visited)} carpeta(s) recorrida(s), {len(explicit_files)} archivo(s) directo(s))"
             )
             return supported
         except Exception as e:  # noqa: BLE001
@@ -206,14 +254,20 @@ class GoogleDriveService:
             print(f"❌ Error leyendo Excel: {e}")
             return ""
 
-    async def get_all_documents_content_with_type(self) -> List[Dict]:
+    async def get_all_documents_content_with_type(
+        self,
+        folder_ids: Optional[List[str]] = None,
+        file_ids: Optional[List[str]] = None,
+    ) -> List[Dict]:
         """
-        Descarga todos los documentos con metadata completa.
+        Descarga todos los documentos con metadata completa, combinando
+        carpetas (`folder_ids`) y archivos sueltos (`file_ids`).
         - PDF: retorna bytes para Document AI.
         - XLSX/XLS: convierte a texto con openpyxl.
+        - Google Sheets / Docs: exportado y decodificado como texto.
         - Resto: texto decodificado.
         """
-        docs = await self.list_documents()
+        docs = await self.list_documents(folder_ids=folder_ids, file_ids=file_ids)
         result: List[Dict] = []
 
         for doc in docs:
@@ -245,22 +299,31 @@ class GoogleDriveService:
 
         return result
 
-    async def get_all_documents_content(self) -> List[Dict]:
+    async def get_all_documents_content(
+        self,
+        folder_ids: Optional[List[str]] = None,
+        file_ids: Optional[List[str]] = None,
+    ) -> List[Dict]:
         """Compatibilidad con código anterior (solo entradas con texto)."""
-        docs = await self.get_all_documents_content_with_type()
+        docs = await self.get_all_documents_content_with_type(folder_ids=folder_ids, file_ids=file_ids)
         return [d for d in docs if d.get("content")]
 
-    def is_configured(self) -> bool:
-        """Verifica si Google Drive está configurado."""
+    def is_configured(
+        self,
+        folder_ids: Optional[List[str]] = None,
+        file_ids: Optional[List[str]] = None,
+    ) -> bool:
+        """Verifica si Google Drive está configurado: credenciales presentes
+        Y (al menos una carpeta O al menos un archivo suelto) configurados."""
         import os
 
+        roots = folder_ids if folder_ids is not None else settings.get_gdrive_folder_ids()
+        explicit_files = file_ids or []
         return bool(
-            settings.get_gdrive_folder_ids()
+            (roots or explicit_files)
             and settings.GOOGLE_APPLICATION_CREDENTIALS
             and os.path.exists(settings.GOOGLE_APPLICATION_CREDENTIALS)
         )
 
 
 gdrive_service = GoogleDriveService()
-
-

@@ -1,264 +1,275 @@
-from __future__ import annotations
+"""
+Google Drive Service — BOTIQ RAG
+═══════════════════════════════════════════════════════════
 
-import re
-from typing import Any, Dict, List, Optional
+CÓMO CONECTAR GOOGLE DRIVE AL PROYECTO:
+────────────────────────────────────────
+PASO 1: Crear Service Account en Google Cloud
+  - console.cloud.google.com → IAM y administración → Cuentas de servicio
+  - "Crear cuenta de servicio" → Nombre: botiq-backend
+  - No es necesario asignar roles del proyecto para solo leer Drive.
+  - Entra a la cuenta creada → pestaña "Claves" → "Agregar clave" → "Crear clave nueva" → JSON
+  - Guarda el archivo descargado como: backend/credentials/service-account.json
 
-from app.core.config import settings
-from app.services.vertex.gemini_text_service import gemini_text_service
+PASO 2: Habilitar las APIs en Google Cloud
+  - APIs y servicios → Biblioteca → habilitar:
+      • Google Drive API
+      • Vertex AI API
+      • (Opcional, PDFs escaneados) Document AI API
 
+PASO 3: Compartir la carpeta de Drive con el Service Account
+  - Abre la carpeta a indexar en Drive
+  - Compartir → agrega el email del Service Account
+    (ej: botiq-backend@TU_PROYECTO.iam.gserviceaccount.com)
+  - Permiso: Lector. Compartir.
+  - IMPORTANTE: comparte la carpeta PADRE; las subcarpetas se heredan
+    y este servicio las recorre de forma recursiva.
 
-GENERAL_SYSTEM_INSTRUCTION = """
-Eres BOTIQ, asistente virtual corporativo de IQ.
+PASO 4: Obtener el ID de la carpeta
+  - URL: drive.google.com/drive/folders/ESTE_ES_EL_ID
+  - Pega ese ID en GDRIVE_FOLDER_ID (soporte) o GDRIVE_SERVERS_FOLDER_ID
+    (servidores) del .env, según qué base de conocimiento sea.
 
-Vas a responder una consulta de ofimática o tecnología general, por ejemplo:
-Excel, Word, Outlook, Teams, Windows, navegadores, impresoras, PDF, certificados,
-VPN, red básica, archivos, periféricos o errores comunes de herramientas.
+PASO 5: Sincronizar
+  - Soporte:    POST /api/v1/support/sync-knowledge-base
+  - Servidores: POST /api/v1/servers-kb/sync-knowledge-base
 
-Contexto importante:
-- No hay una FAQ interna aplicable.
-- No hay un documento suficiente en la base de conocimiento corporativa.
-- La búsqueda web no estuvo disponible o no entregó una respuesta útil.
-- Por eso debes orientar con conocimiento general y público de la herramienta.
+TIPOS DE ARCHIVO SOPORTADOS:
+  ✅ Google Docs        → exportado como texto plano
+  ✅ Google Sheets      → exportado como CSV
+  ✅ .txt / .csv        → texto directo
+  ✅ .xlsx / .xls       → todas las hojas extraídas como texto (openpyxl)
+  ✅ .pdf digital       → extracción automática
+  ✅ .pdf escaneado     → requiere Document AI (DOCUMENT_AI_PROCESSOR_ID)
+  ⚠️ .docx              → soporte básico (texto plano)
 
-Reglas estrictas:
-1. Responde únicamente con orientación general de la herramienta o tecnología mencionada.
-2. No inventes aplicativos internos de IQ, URLs internas, IPs, servidores, estados,
-   políticas internas, procedimientos de Aranda, AdminREA, portales propios ni datos
-   que no estén en el contexto.
-3. Si el caso depende de una configuración interna de IQ, dilo claramente y recomienda
-   escalar a soporte con la evidencia necesaria.
-4. No digas frases largas como "Como BOTIQ..." o "De acuerdo con mi conocimiento...".
-   Empieza directamente con la orientación.
-5. Da pasos concretos, breves y accionables.
-6. Si el usuario pide "guíame", "paso a paso", "continúa", "qué hago" o algo similar,
-   debes continuar con el último problema técnico tratado en el historial.
-7. Si hay una captura o análisis de imagen, úsalo para orientar la respuesta, pero no
-   afirmes datos internos que no estén visibles.
-8. Máximo 6 pasos.
-9. Cierra con una recomendación breve sobre cuándo escalar a soporte.
-10. Aclara que es una guía general, no un procedimiento interno validado por IQ.
+NOTA: este servicio es genérico -- no está atado a una sola base de
+conocimiento. Cada método acepta un parámetro `folder_ids` opcional; si no
+se pasa, usa por compatibilidad las carpetas de soporte
+(settings.get_gdrive_folder_ids()). El módulo de servidores
+(app/modules/servers_kb/service.py) le pasa settings.get_servers_folder_ids()
+explícitamente para apuntar a su propia carpeta.
+═══════════════════════════════════════════════════════════
 """
 
+import io
+from typing import Dict, List, Optional
 
-FOLLOW_UP_PATTERNS = {
-    "guiame",
-    "guíame",
-    "orientame",
-    "oriéntame",
-    "paso a paso",
-    "continua",
-    "continúa",
-    "sigue",
-    "que hago",
-    "qué hago",
-    "ayudame",
-    "ayúdame",
-    "no funciono",
-    "no funcionó",
-    "sigue igual",
-    "y ahora",
-    "ahora que",
-    "ahora qué",
-}
+from app.core.config import settings
+
+FOLDER_MIME = "application/vnd.google-apps.folder"
 
 
-INTERNAL_RISK_KEYWORDS = {
-    "aranda",
-    "adminrea",
-    "iq",
-    "portal interno",
-    "servidor interno",
-    "ip interna",
-    "base de datos interna",
-    "vpn corporativa",
-    "directorio activo",
-    "active directory",
-    "ldap",
-}
+class GoogleDriveService:
 
+    # mime de Drive -> tipo lógico interno
+    SUPPORTED_MIME_TYPES = {
+        "application/vnd.google-apps.document": "google_doc",
+        "application/vnd.google-apps.spreadsheet": "google_sheet",
+        "application/pdf": "pdf",
+        "text/plain": "text",
+        "text/csv": "text",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",  # .xlsx
+        "application/vnd.ms-excel": "xlsx",  # .xls antiguo
+    }
 
-def _normalize_text(value: str) -> str:
-    return (value or "").strip().lower()
+    def __init__(self):
+        self._service = None
 
+    def _get_service(self):
+        """Construye el cliente de Google Drive usando Service Account."""
+        if self._service is None:
+            import os
 
-def _is_short_follow_up(question: str) -> bool:
-    normalized = _normalize_text(question)
-    if not normalized:
-        return False
+            if not settings.GOOGLE_APPLICATION_CREDENTIALS:
+                raise RuntimeError("GOOGLE_APPLICATION_CREDENTIALS no configurado en .env")
+            if not os.path.exists(settings.GOOGLE_APPLICATION_CREDENTIALS):
+                raise RuntimeError(
+                    f"Archivo de credenciales no encontrado: {settings.GOOGLE_APPLICATION_CREDENTIALS}\n"
+                    f"Coloca el service-account.json en backend/credentials/"
+                )
+            from google.oauth2 import service_account
+            from googleapiclient.discovery import build
 
-    if len(normalized) <= 45:
-        return True
-
-    return any(pattern in normalized for pattern in FOLLOW_UP_PATTERNS)
-
-
-def _extract_recent_user_context(history: Optional[List[Dict[str, Any]]]) -> Optional[str]:
-    """
-    Recupera el último mensaje útil del usuario para que frases cortas como
-    "GUIAME", "continúa" o "no funcionó" no pierdan el contexto.
-    """
-    if not history:
-        return None
-
-    for item in reversed(history):
-        role = str(item.get("role") or "").lower()
-        content = str(item.get("content") or "").strip()
-
-        if role == "user" and content and not _is_short_follow_up(content):
-            return content[:500]
-
-    return None
-
-
-def _contains_internal_dependency(question: str, image_analysis: Optional[str] = None) -> bool:
-    text = f"{question or ''} {image_analysis or ''}".lower()
-    return any(keyword in text for keyword in INTERNAL_RISK_KEYWORDS)
-
-
-def _clean_response(text: str) -> str:
-    """
-    Limpieza defensiva para evitar respuestas con prefijos largos o frases
-    que hacen parecer que BOTIQ está citando política interna cuando no lo está.
-    """
-    if not text:
-        return ""
-
-    cleaned = text.strip()
-
-    # Evita arranques repetitivos o poco útiles.
-    cleaned = re.sub(r"^(como botiq[,:\s]*)", "", cleaned, flags=re.IGNORECASE).strip()
-    cleaned = re.sub(
-        r"^(de acuerdo con mi conocimiento[,:\s]*)",
-        "",
-        cleaned,
-        flags=re.IGNORECASE,
-    ).strip()
-
-    # Evita múltiples saltos de línea excesivos.
-    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-
-    return cleaned
-
-
-def _fallback_general_message(question: str) -> str:
-    """
-    Respuesta segura cuando Gemini falla o devuelve una salida vacía.
-    """
-    return (
-        "No pude generar una guía completa en este momento, pero puedes iniciar con estas validaciones generales:\n\n"
-        "1. Confirma el error exacto que aparece en pantalla.\n"
-        "2. Reinicia la aplicación o el equipo si el problema es local.\n"
-        "3. Verifica conexión, permisos, cableado o red según el caso.\n"
-        "4. Prueba nuevamente con otro archivo, navegador o usuario si aplica.\n"
-        "5. Toma una captura del error y registra fecha, hora y usuario afectado.\n"
-        "6. Si el problema continúa, escálalo a soporte con esa evidencia.\n\n"
-        "Esta es una orientación general, no un procedimiento interno validado por IQ."
-    )
-
-
-class GeneralAssistantService:
-    """
-    Último eslabón de la cadena de respaldo.
-
-    Orden recomendado del flujo:
-    1. FAQ interna.
-    2. RAG corporativo.
-    3. Conocimiento web aprobado.
-    4. Búsqueda web controlada.
-    5. Este servicio: Gemini con conocimiento general, sin fuente interna.
-
-    Este servicio NO debe responder sobre políticas internas, aplicativos internos,
-    URLs internas, estados de servidores ni procedimientos corporativos específicos.
-    """
-
-    async def build_general_answer(
-        self,
-        question: str,
-        image_analysis: Optional[str] = None,
-        history: Optional[List[Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
-        question = (question or "").strip()
-
-        previous_context = _extract_recent_user_context(history)
-
-        prompt_parts: List[str] = []
-
-        if previous_context and _is_short_follow_up(question):
-            prompt_parts.append(
-                "Contexto anterior del usuario:\n"
-                f"{previous_context}"
+            creds = service_account.Credentials.from_service_account_file(
+                settings.GOOGLE_APPLICATION_CREDENTIALS,
+                scopes=["https://www.googleapis.com/auth/drive.readonly"],
             )
-            prompt_parts.append(
-                "Mensaje actual del usuario:\n"
-                f"{question}"
+            self._service = build("drive", "v3", credentials=creds, cache_discovery=False)
+        return self._service
+
+    def _list_folder_raw(self, folder_id: str) -> List[Dict]:
+        """Lista todos los hijos directos de una carpeta (con paginación)."""
+        service = self._get_service()
+        files: List[Dict] = []
+        page_token = None
+        query = f"'{folder_id}' in parents and trashed=false"
+        while True:
+            result = (
+                service.files()
+                .list(
+                    q=query,
+                    fields="nextPageToken, files(id, name, mimeType, modifiedTime, size)",
+                    pageSize=100,
+                    orderBy="modifiedTime desc",
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                    pageToken=page_token,
+                )
+                .execute()
             )
-            prompt_parts.append(
-                "Instrucción:\n"
-                "El usuario está pidiendo continuidad o guía sobre el contexto anterior. "
-                "Responde manteniendo ese problema como tema principal."
-            )
-        else:
-            prompt_parts.append(f"Pregunta del usuario:\n{question}")
+            files.extend(result.get("files", []))
+            page_token = result.get("nextPageToken")
+            if not page_token:
+                break
+        return files
 
-        if image_analysis:
-            prompt_parts.append(
-                "Contexto de imagen o captura enviada por el usuario:\n"
-                f"{image_analysis}"
-            )
-
-        if _contains_internal_dependency(question, image_analysis):
-            prompt_parts.append(
-                "Advertencia:\n"
-                "La consulta puede depender de configuración interna de IQ. "
-                "No inventes datos internos. Si no es posible dar pasos generales, "
-                "recomienda escalar a soporte con evidencia."
-            )
-
-        prompt_parts.append(
-            "Formato obligatorio de respuesta:\n"
-            "- Empieza directo con la solución.\n"
-            "- Máximo 6 pasos numerados.\n"
-            "- Usa lenguaje claro y práctico.\n"
-            "- No inventes información interna.\n"
-            "- Termina indicando cuándo escalar a soporte.\n"
-            "- Aclara que es una guía general, no un procedimiento interno validado por IQ."
-        )
-
-        prompt = "\n\n".join(prompt_parts)
-
+    async def list_documents(self, folder_ids: Optional[List[str]] = None) -> List[Dict]:
+        """
+        Lista todos los archivos soportados, recorriendo de forma recursiva
+        cada carpeta raíz dada en `folder_ids` (o, si no se pasa, las carpetas
+        de soporte configuradas por compatibilidad). Deduplica carpetas y
+        archivos para que el solapamiento entre una raíz y sus subcarpetas no
+        genere indexación doble.
+        """
+        roots = folder_ids if folder_ids is not None else settings.get_gdrive_folder_ids()
+        if not roots:
+            print("⚠️  No hay carpetas configuradas para esta base de conocimiento — sin documentos")
+            return []
         try:
-            result = await gemini_text_service.generate(
-                prompt=prompt,
-                system_instruction=GENERAL_SYSTEM_INSTRUCTION,
-                history=history,
-                temperature=0.2,
-                model=settings.VERTEX_FAST_MODEL,
-                max_output_tokens=settings.GENERAL_AI_ANSWER_MAX_OUTPUT_TOKENS,
+            supported: List[Dict] = []
+            seen_files = set()        # file_id ya agregados
+            visited = set()           # carpetas ya recorridas
+            # Recorrido por amplitud sobre todas las raíces (evita recursión profunda).
+            pending = list(roots)
+
+            while pending:
+                folder_id = pending.pop(0)
+                if folder_id in visited:
+                    continue
+                visited.add(folder_id)
+
+                for f in self._list_folder_raw(folder_id):
+                    mime = f.get("mimeType")
+                    if mime == FOLDER_MIME:
+                        pending.append(f["id"])
+                    elif mime in self.SUPPORTED_MIME_TYPES and f["id"] not in seen_files:
+                        seen_files.add(f["id"])
+                        supported.append(f)
+
+            print(
+                f"📁 Google Drive: {len(supported)} documentos soportados "
+                f"en {len(visited)} carpeta(s), a partir de {len(roots)} raíz(es)"
             )
+            return supported
+        except Exception as e:  # noqa: BLE001
+            print(f"❌ Google Drive error al listar: {e}")
+            return []
 
-            text = _clean_response(str(result.get("text") or ""))
+    async def download_bytes(self, file_id: str, mime_type: str) -> Optional[bytes]:
+        """Descarga (o exporta) un archivo como bytes."""
+        try:
+            from googleapiclient.http import MediaIoBaseDownload
 
-            if not text:
-                text = _fallback_general_message(question)
+            service = self._get_service()
 
-            result["text"] = text
-            result["source"] = "general_ai_fallback"
-            result["is_internal_procedure"] = False
-            result["requires_admin_review"] = True
+            if mime_type == "application/vnd.google-apps.document":
+                request = service.files().export_media(fileId=file_id, mimeType="text/plain")
+            elif mime_type == "application/vnd.google-apps.spreadsheet":
+                # Google Sheets nativo → exportar como CSV (primera hoja).
+                request = service.files().export_media(fileId=file_id, mimeType="text/csv")
+            else:
+                request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
 
-            return result
+            buffer = io.BytesIO()
+            downloader = MediaIoBaseDownload(buffer, request)
+            done = False
+            while not done:
+                _, done = downloader.next_chunk()
+            return buffer.getvalue()
+        except Exception as e:  # noqa: BLE001
+            print(f"❌ Error descargando {file_id}: {e}")
+            return None
 
-        except Exception as exc:  # noqa: BLE001
-            return {
-                "success": False,
-                "text": _fallback_general_message(question),
-                "error": str(exc),
-                "tokens_used": 0,
-                "response_time_ms": 0,
-                "source": "general_ai_fallback_error",
-                "is_internal_procedure": False,
-                "requires_admin_review": True,
+    @staticmethod
+    def _xlsx_to_text(file_bytes: bytes) -> str:
+        """Convierte un .xlsx/.xls en texto plano legible (todas las hojas)."""
+        try:
+            import openpyxl
+
+            wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+            blocks: List[str] = []
+            for sheet in wb.worksheets:
+                rows_text: List[str] = []
+                for row in sheet.iter_rows(values_only=True):
+                    cells = [str(c).strip() for c in row if c is not None and str(c).strip()]
+                    if cells:
+                        rows_text.append(" | ".join(cells))
+                if rows_text:
+                    blocks.append(f"[Hoja: {sheet.title}]\n" + "\n".join(rows_text))
+            wb.close()
+            return "\n\n".join(blocks)
+        except Exception as e:  # noqa: BLE001
+            print(f"❌ Error leyendo Excel: {e}")
+            return ""
+
+    async def get_all_documents_content_with_type(self, folder_ids: Optional[List[str]] = None) -> List[Dict]:
+        """
+        Descarga todos los documentos con metadata completa, para las
+        carpetas dadas en `folder_ids` (o las de soporte por compatibilidad).
+        - PDF: retorna bytes para Document AI.
+        - XLSX/XLS: convierte a texto con openpyxl.
+        - Resto: texto decodificado.
+        """
+        docs = await self.list_documents(folder_ids=folder_ids)
+        result: List[Dict] = []
+
+        for doc in docs:
+            mime = doc["mimeType"]
+            doc_type = self.SUPPORTED_MIME_TYPES.get(mime, "unknown")
+            file_bytes = await self.download_bytes(doc["id"], mime)
+            if not file_bytes:
+                continue
+
+            entry = {
+                "file_id": doc["id"],
+                "name": doc["name"],
+                "mime_type": mime,
+                "modified_at": doc.get("modifiedTime", ""),
+                "doc_type": doc_type,
+                "bytes": None,
+                "content": "",
             }
 
+            if mime == "application/pdf":
+                # Se procesa con Document AI aguas arriba.
+                entry["bytes"] = file_bytes
+            elif doc_type == "xlsx":
+                entry["content"] = self._xlsx_to_text(file_bytes)
+            else:
+                entry["content"] = file_bytes.decode("utf-8", errors="ignore")
 
-general_assistant_service = GeneralAssistantService()
+            result.append(entry)
+
+        return result
+
+    async def get_all_documents_content(self, folder_ids: Optional[List[str]] = None) -> List[Dict]:
+        """Compatibilidad con código anterior (solo entradas con texto)."""
+        docs = await self.get_all_documents_content_with_type(folder_ids=folder_ids)
+        return [d for d in docs if d.get("content")]
+
+    def is_configured(self, folder_ids: Optional[List[str]] = None) -> bool:
+        """Verifica si Google Drive está configurado para las carpetas dadas
+        (o las de soporte por compatibilidad)."""
+        import os
+
+        roots = folder_ids if folder_ids is not None else settings.get_gdrive_folder_ids()
+        return bool(
+            roots
+            and settings.GOOGLE_APPLICATION_CREDENTIALS
+            and os.path.exists(settings.GOOGLE_APPLICATION_CREDENTIALS)
+        )
+
+
+gdrive_service = GoogleDriveService()

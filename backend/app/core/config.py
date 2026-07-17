@@ -11,10 +11,9 @@ _DEV_SECRET_KEY = "dev-secret-change-in-production-32chars!!"
 
 class Settings(BaseSettings):
     APP_NAME: str = "BOTIQ"
-    APP_VERSION: str = "1.13.0"
+    APP_VERSION: str = "1.17.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
-    APP_TIMEZONE: str = "America/Bogota"
 
     DATABASE_URL: str = "postgresql://botiq_user:botiq_pass@db:5432/botiq_db"
 
@@ -120,6 +119,22 @@ class Settings(BaseSettings):
     CHROMA_PORT: int = 8000
     CHROMA_COLLECTION_NAME: str = "botiq_knowledge_base"
 
+    # Base de conocimiento de SERVIDORES (memoria/RAM y estado), totalmente
+    # separada de la base de conocimiento de soporte: carpeta de Drive propia
+    # y colección propia en ChromaDB, para que la búsqueda semántica de una
+    # no traiga resultados de la otra.
+    GDRIVE_SERVERS_FOLDER_ID: str = ""
+    GDRIVE_SERVERS_FOLDER_IDS: str = ""
+
+    CHROMA_SERVERS_COLLECTION_NAME: str = "botiq_servers_knowledge_base"
+
+    # Archivos sueltos de Drive (sin carpeta contenedora) para la base de
+    # conocimiento de SERVIDORES. Útil cuando el archivo (ej. la hoja de
+    # memoria/RAM) no vive en ninguna carpeta que valga la pena compartir
+    # completa -- se apunta directo al archivo por su ID.
+    GDRIVE_SERVERS_FILE_ID: str = ""
+    GDRIVE_SERVERS_FILE_IDS: str = ""
+
     # API externa de estados / disponibilidad de aplicativos.
     # Esta API es insumo interno del bot, no se expone directamente al usuario.
     APPLICATION_STATUS_API_URL: str = ""
@@ -130,64 +145,35 @@ class Settings(BaseSettings):
     SERVER_DASHBOARD_API_URL: str = ""
     SERVER_DASHBOARD_API_KEY: str = ""
 
-    # ── Integración Aranda Service Desk ASDK API v8.6 ─────────────────────
-    # La integración queda desactivada hasta completar todos los IDs y secretos.
-    # BOTIQ crea casos únicamente como última instancia, después de agotar los
-    # intentos mínimos de solución y recibir confirmación explícita del usuario.
-    ARANDA_ENABLED: bool = False
-    # Permite seguimiento/consulta sin habilitar todavía la creación real.
-    ARANDA_CREATION_ENABLED: bool = False
-    ARANDA_API_URL: str = ""  # Ej.: https://host/ASDKAPI
-    ARANDA_ALLOWED_HOSTS: str = "aranda.clientes.iq-online.net.co"
+    # Integración Aranda.
+    # ── Integración Aranda SERVICE DESK (ASDK) ──────────────────────────────
+    # El API real de ASDK NO usa una API key estática: se autentica con
+    # usuario/contraseña contra /user/login, que devuelve un sessionId (token)
+    # de sesión. Ese token se manda como header "Authorization: {token}" (sin
+    # prefijo "Bearer") en cada llamada posterior, y expira -- hay que
+    # renovarlo (/session/renew) o volver a loguearse si una llamada falla
+    # por sesión inválida. Ver app/services/aranda_service.py.
+    #
+    # Si ARANDA_BASE_URL está vacío, BOTIQ no crea ticket real y deja el caso
+    # marcado como elegible ("pending_configuration").
+    ARANDA_BASE_URL: str = ""
+    ARANDA_API_VERSION: str = "v8.6"
     ARANDA_USERNAME: str = ""
     ARANDA_PASSWORD: str = ""
 
-    # Compatibilidad temporal: ya no se usa como mecanismo de autenticación.
-    # ASDK requiere login y retorna un sessionId en Authorization (sin Bearer).
-    ARANDA_API_KEY: str = ""
-
-    ARANDA_LANGUAGE_ID: int = 2
-    ARANDA_CONSOLE_ID: int = 0
-    ARANDA_CONSOLE_VERSION: str = "BOTIQ-1.0"
-
-    # Tipo de caso: 1=Incidente, 2=Problema, 3=Cambio, 4=Requerimiento.
-    ARANDA_DEFAULT_ITEM_TYPE: int = 1
-    ARANDA_AUTHOR_ID: int = 0  # 0 = usar userId de la cuenta técnica autenticada
-    ARANDA_PROJECT_ID: int = 0
-    ARANDA_CATEGORY_ID: int = 0
-    ARANDA_GROUP_ID: int = 0
-    ARANDA_SERVICE_ID: int = 0
-    ARANDA_SLA_ID: int = 0
-    ARANDA_REGISTRY_TYPE_ID: int = 0
-    ARANDA_URGENCY_ID: int = 0
-    ARANDA_CUSTOMER_ID: int = 0
-    ARANDA_COMPANY_ID: int = 0
-    ARANDA_RESPONSIBLE_ID: int = 0
-    ARANDA_CI_ID: int = 0
+    # Campos obligatorios para crear un caso (item/add) que no tienen un
+    # valor dinámico natural desde la conversación de BOTIQ -- se configuran
+    # una vez según cómo esté armado el proyecto de Aranda del cliente.
+    ARANDA_AUTHOR_ID: str = ""       # Usuario (de Aranda) que queda como autor de los casos creados por BOTIQ.
+    ARANDA_GROUP_ID: str = ""        # Grupo de especialistas que atiende los casos.
+    ARANDA_SLA_ID: str = ""          # SLA aplicado a los casos creados por BOTIQ.
+    ARANDA_PROJECT_ID: str = ""
+    ARANDA_CATEGORY_ID: str = ""
+    ARANDA_SERVICE_ID: str = ""
+    ARANDA_REGISTRY_TYPE_ID: str = ""  # Medio de registro (ej. "Web", "Chatbot" si existe esa opción en el proyecto).
+    ARANDA_ITEM_TYPE: int = 1        # 1=Incidente, 2=Problema, 3=Cambio, 4=Requerimiento de servicio.
 
     ARANDA_TIMEOUT_SECONDS: int = 15
-    ARANDA_CONNECT_TIMEOUT_SECONDS: int = 5
-    ARANDA_VERIFY_TLS: bool = True
-    ARANDA_CA_BUNDLE: str = ""
-    ARANDA_CLOSE_SESSION_AFTER_REQUEST: bool = True
-    ARANDA_LIST_VIEW_ID: int = 5
-    ARANDA_MAX_PAGE_SIZE: int = 50
-    ARANDA_MAX_SUBJECT_CHARS: int = 180
-    ARANDA_MAX_DESCRIPTION_CHARS: int = 12000
-    ARANDA_MAX_ATTACHMENT_BYTES: int = 10485760
-
-    # Seguimiento de tickets desde el chat (solo lectura).
-    ARANDA_TRACKING_ENABLED: bool = True
-    ARANDA_TRACKING_RATE_LIMIT: str = "10/minute"
-    ARANDA_TRACKING_HISTORY_LIMIT: int = 5
-    ARANDA_TRACKING_FILE_LIMIT: int = 10
-    # Vacío = solo ARANDA_PROJECT_ID. Para varios proyectos: "1,2,3".
-    ARANDA_TRACKING_ALLOWED_PROJECT_IDS: str = ""
-    ARANDA_TRACKING_EMPLOYEE_REQUIRE_OWNERSHIP: bool = True
-    ARANDA_TRACKING_SHOW_PRIVATE_NOTES_TO_SUPPORT: bool = False
-    ARANDA_TRACKING_SHOW_PRIVATE_NOTES_TO_ADMIN: bool = True
-    # Orden para referencias numéricas sin prefijo.
-    ARANDA_TRACKING_TRY_ITEM_TYPES: str = "4,1,2,3"
 
     # Controles de consumo y seguridad conversacional.
     MAX_QUESTIONS_PER_SESSION: int = 8
@@ -244,6 +230,37 @@ class Settings(BaseSettings):
                 ids.append(fid)
         return ids
 
+    def get_servers_folder_ids(self) -> List[str]:
+        """
+        Lista de carpetas raíz de Drive a indexar para la base de conocimiento
+        de SERVIDORES (memoria/RAM), separada de la de soporte general.
+        """
+        ids: List[str] = []
+        if self.GDRIVE_SERVERS_FOLDER_ID.strip():
+            ids.append(self.GDRIVE_SERVERS_FOLDER_ID.strip())
+        for raw in self.GDRIVE_SERVERS_FOLDER_IDS.split(","):
+            fid = raw.strip()
+            if fid and fid not in ids:
+                ids.append(fid)
+        return ids
+
+    def get_servers_file_ids(self) -> List[str]:
+        """
+        Lista de archivos sueltos de Drive (sin carpeta) a indexar para la
+        base de conocimiento de SERVIDORES. Se combinan con
+        get_servers_folder_ids(): un archivo puede venir de una carpeta
+        recorrida recursivamente, de esta lista directa, o de ambas fuentes
+        a la vez (deduplicado por file_id en gdrive_service).
+        """
+        ids: List[str] = []
+        if self.GDRIVE_SERVERS_FILE_ID.strip():
+            ids.append(self.GDRIVE_SERVERS_FILE_ID.strip())
+        for raw in self.GDRIVE_SERVERS_FILE_IDS.split(","):
+            fid = raw.strip()
+            if fid and fid not in ids:
+                ids.append(fid)
+        return ids
+
     def get_support_allowed_domains(self) -> List[str]:
         return [d.strip().lower() for d in self.SUPPORT_ALLOWED_EMAIL_DOMAINS.split(",") if d.strip()]
 
@@ -277,47 +294,6 @@ class Settings(BaseSettings):
                 )
             if self.DEBUG:
                 problems.append("DEBUG=true en ENVIRONMENT=production. Debe ser false.")
-
-            if self.ARANDA_ENABLED:
-                required_aranda_text = {
-                    "ARANDA_API_URL": self.ARANDA_API_URL,
-                    "ARANDA_USERNAME": self.ARANDA_USERNAME,
-                    "ARANDA_PASSWORD": self.ARANDA_PASSWORD,
-                }
-                required_aranda_ids = {
-                    "ARANDA_PROJECT_ID": self.ARANDA_PROJECT_ID,
-                    "ARANDA_CATEGORY_ID": self.ARANDA_CATEGORY_ID,
-                    "ARANDA_GROUP_ID": self.ARANDA_GROUP_ID,
-                    "ARANDA_SERVICE_ID": self.ARANDA_SERVICE_ID,
-                    "ARANDA_SLA_ID": self.ARANDA_SLA_ID,
-                    "ARANDA_REGISTRY_TYPE_ID": self.ARANDA_REGISTRY_TYPE_ID,
-                } if self.ARANDA_CREATION_ENABLED else {}
-                missing_text = [
-                    name for name, value in required_aranda_text.items()
-                    if not str(value or "").strip()
-                ]
-                missing_ids = [
-                    name for name, value in required_aranda_ids.items()
-                    if int(value or 0) <= 0
-                ]
-                if missing_text or missing_ids:
-                    problems.append(
-                        "ARANDA_ENABLED=true pero faltan valores obligatorios: "
-                        + ", ".join(missing_text + missing_ids)
-                    )
-                if self.ARANDA_API_URL and not self.ARANDA_API_URL.lower().startswith("https://"):
-                    problems.append("ARANDA_API_URL debe usar HTTPS en producción.")
-                if not self.ARANDA_VERIFY_TLS:
-                    problems.append("ARANDA_VERIFY_TLS=false no está permitido en producción.")
-                if not self.ARANDA_CLOSE_SESSION_AFTER_REQUEST:
-                    problems.append(
-                        "ARANDA_CLOSE_SESSION_AFTER_REQUEST debe ser true para liberar licencias."
-                    )
-                if (
-                    self.ARANDA_CREATION_ENABLED
-                    and self.ARANDA_DEFAULT_ITEM_TYPE not in {1, 2, 3, 4}
-                ):
-                    problems.append("ARANDA_DEFAULT_ITEM_TYPE debe estar entre 1 y 4.")
 
             if problems:
                 raise ValueError(
