@@ -1,6 +1,6 @@
-"""Seguimiento seguro y de solo lectura de tickets de Aranda desde el chat."""
 from __future__ import annotations
 
+import html
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -9,10 +9,14 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 from zoneinfo import ZoneInfo
 
 from app.core.config import settings
+from app.core.logging_config import get_logger
 from app.core.roles import UserRole
 from app.models.conversation import Conversation
 from app.models.user import User
 from app.services.aranda_service import ArandaIntegrationError, aranda_service
+
+
+logger = get_logger(__name__, service="aranda_tracking")
 
 
 @dataclass(frozen=True)
@@ -65,6 +69,55 @@ class ArandaTrackingService:
         "historico del ticket",
         "histórico del ticket",
         "movimientos del ticket",
+    )
+
+    ACTION_LABELS = {
+        "ADD ATTACHMENT": "Archivo adjunto agregado",
+        "DELETE ATTACHMENT": "Archivo adjunto eliminado",
+        "REMOVE ATTACHMENT": "Archivo adjunto eliminado",
+        "ATTACH FILE": "Archivo adjunto agregado",
+        "ADD FILE": "Archivo adjunto agregado",
+        "UPLOAD FILE": "Archivo adjunto agregado",
+        "CREATE ITEM": "Ticket creado",
+        "REGISTER ITEM": "Ticket registrado",
+        "UPDATE ITEM": "Ticket actualizado",
+        "EDIT ITEM": "Ticket actualizado",
+        "ASSIGN ITEM": "Ticket asignado",
+        "REASSIGN ITEM": "Ticket reasignado",
+        "CHANGE STATE": "Cambio de estado",
+        "CHANGE STATUS": "Cambio de estado",
+        "ADD NOTE": "Nota agregada",
+        "CREATE NOTE": "Nota agregada",
+        "NOTE": "Nota agregada",
+        "NOTA": "Nota agregada",
+        "CLOSE ITEM": "Ticket cerrado",
+        "REOPEN ITEM": "Ticket reabierto",
+        "SOLUTION ITEM": "Solución registrada",
+        "RESOLVE ITEM": "Ticket resuelto",
+    }
+
+    ATTACHMENT_ACTIONS = {
+        "ADD ATTACHMENT",
+        "DELETE ATTACHMENT",
+        "REMOVE ATTACHMENT",
+        "ATTACH FILE",
+        "ADD FILE",
+        "UPLOAD FILE",
+    }
+
+    MONTHS_ES = (
+        "enero",
+        "febrero",
+        "marzo",
+        "abril",
+        "mayo",
+        "junio",
+        "julio",
+        "agosto",
+        "septiembre",
+        "octubre",
+        "noviembre",
+        "diciembre",
     )
 
     def is_tracking_request(self, message: str) -> bool:
@@ -201,6 +254,11 @@ class ArandaTrackingService:
                 extra={"error_code": exc.code, "http_status": exc.http_status},
             )
         except Exception as exc:  # defensa final; no exponer detalles internos
+            logger.exception(
+                "aranda_tracking_unexpected_error",
+                reference=reference.normalized,
+                exception_type=type(exc).__name__,
+            )
             return self._safe_failure(
                 reference,
                 status="unexpected_error",
@@ -236,6 +294,10 @@ class ArandaTrackingService:
         files = self._filter_files(bundle.get("files") or [], current_user.role)
         history_limit = max(1, int(getattr(settings, "ARANDA_TRACKING_HISTORY_LIMIT", 5)))
         file_limit = max(0, int(getattr(settings, "ARANDA_TRACKING_FILE_LIMIT", 10)))
+
+        # Los eventos de adjuntos se muestran en una sección propia. Excluirlos
+        # del histórico evita repetir el mismo archivo dos veces en la respuesta.
+        history = [row for row in history if not self._is_attachment_history(row)]
         history = self._sort_history(history)[:history_limit]
         files = files[:file_limit]
 
@@ -394,82 +456,186 @@ class ArandaTrackingService:
         history_error: bool,
         files_error: bool,
     ) -> str:
-        state = self._clean_text(case.get("StateName"), 120) or "No informado"
+        state = self._clean_text(case.get("StateName"), 120) or "Estado no informado"
         is_closed = self._bool_value(case.get("IsClosed"))
+        status_summary = f"{state} · {'Cerrado' if is_closed else 'Abierto'}"
+
+        subject = self._clean_text(case.get("Subject"), 300)
+        service = self._clean_text(case.get("ServiceName"), 180)
+        category = self._clean_text(case.get("CategoryName"), 180)
+        group = self._clean_text(case.get("GroupName"), 180)
+        specialist = self._clean_text(case.get("SpecialistName"), 180)
+        priority = self._humanize_level(case.get("PriorityName"))
+        urgency = self._humanize_level(case.get("UrgencyName"))
+        progress = self._progress(case.get("Progress"))
+
+        registered_at = self._format_date_long(case.get("RegistrationDate"))
+        expected_solution = self._format_date_long(
+            case.get("SolutionDateExpected")
+            or self._nested(case, "SolutionDate", "Expected")
+        )
+        closed_at = self._format_date_long(
+            case.get("ClosedDate")
+            or case.get("SolutionDateReal")
+            or self._nested(case, "SolutionDate", "Real")
+        )
+
         lines = [
-            f"🎫 **Seguimiento del ticket {display_reference}**",
+            f"🎫 **Ticket {display_reference}**",
             "",
-            f"- **Estado actual:** {state}",
-            f"- **Situación:** {'Cerrado' if is_closed else 'Abierto / en gestión'}",
+            f"**{status_summary}**",
         ]
 
-        optional_fields = [
-            ("Asunto", case.get("Subject")),
-            ("Servicio", case.get("ServiceName")),
-            ("Categoría", case.get("CategoryName")),
-            ("Grupo asignado", case.get("GroupName")),
-            ("Especialista", case.get("SpecialistName")),
-            ("Prioridad", case.get("PriorityName")),
-            ("Urgencia", case.get("UrgencyName")),
-            ("Progreso", self._progress(case.get("Progress"))),
-            ("Fecha de registro", self._format_date(case.get("RegistrationDate"))),
-            (
-                "Fecha esperada de solución",
-                self._format_date(
-                    case.get("SolutionDateExpected")
-                    or self._nested(case, "SolutionDate", "Expected")
-                ),
-            ),
-            ("Fecha de cierre", self._format_date(case.get("ClosedDate"))),
+        summary_fields = [
+            ("Asunto", subject),
+            ("Servicio", service),
+            ("Categoría", category),
         ]
-        for label, value in optional_fields:
-            if value not in (None, "", "No informado"):
-                lines.append(f"- **{label}:** {value}")
+        if any(value for _, value in summary_fields):
+            lines.extend(["", "### Resumen"])
+            for label, value in summary_fields:
+                if value:
+                    lines.append(f"**{label}:** {value}")
 
-        lines.extend(["", "**Últimas novedades**"])
+        attention_fields = [
+            ("Grupo responsable", group),
+            ("Especialista responsable", specialist),
+            ("Prioridad", priority),
+            ("Urgencia", urgency),
+            ("Avance reportado por Aranda", progress),
+        ]
+        if any(value for _, value in attention_fields):
+            lines.extend(["", "### Atención del caso"])
+            for label, value in attention_fields:
+                if value:
+                    lines.append(f"**{label}:** {value}")
+
+        date_fields = [
+            ("Registrado", registered_at),
+            ("Fecha estimada de solución", expected_solution),
+            ("Fecha de cierre", closed_at if is_closed else None),
+        ]
+        if any(value for _, value in date_fields):
+            lines.extend(["", "### Fechas"])
+            for label, value in date_fields:
+                if value:
+                    lines.append(f"**{label}:** {value}")
+
+        lines.extend(["", "### Últimas novedades"])
         if history:
             for index, row in enumerate(history, start=1):
-                date = self._format_date(row.get("CreationDate")) or "Fecha no informada"
-                action = self._clean_text(row.get("ActionName"), 100) or "Actualización"
-                author = self._clean_text(row.get("AuthorName"), 120) or "Aranda"
-                description = self._clean_text(row.get("Description"), 600) or "Sin detalle público."
+                date = self._format_date_long(row.get("CreationDate")) or "Fecha no informada"
+                action = self._translate_action(row.get("ActionName"))
+                author = self._clean_text(row.get("AuthorName"), 120) or "Aranda Service Desk"
+                description = self._humanize_history_description(row)
                 lines.extend(
                     [
                         "",
-                        f"{index}. **{date} — {action}**",
-                        f"   {description}",
-                        f"   _Registrado por: {author}_",
+                        f"**{index}. {date}**",
+                        f"**{action}**",
+                        description,
+                        f"_Registrado por: {author}_",
                     ]
                 )
         elif history_error:
-            lines.append("No fue posible consultar el histórico, pero sí el estado actual del caso.")
+            lines.append(
+                "No fue posible consultar el histórico, aunque el estado actual del ticket sí está disponible."
+            )
+        elif files:
+            lines.append(
+                "No hay actualizaciones públicas adicionales; los archivos asociados se muestran a continuación."
+            )
         else:
             lines.append("No hay movimientos públicos disponibles para mostrar.")
 
-        lines.extend(["", "**Archivos adjuntos**"])
+        lines.extend(["", "### Archivos adjuntos"])
         if files:
             for row in files:
+                name = self._clean_text(row.get("Name"), 200) or "Archivo"
                 size = self._human_size(row.get("Size"))
-                created = self._format_date(row.get("Created"))
-                suffix = " · ".join(value for value in (size, created) if value)
-                lines.append(
-                    f"- {row.get('Name') or 'Archivo'}" + (f" ({suffix})" if suffix else "")
-                )
-            lines.append(
-                "Por seguridad, BOTIQ no publica en el chat los enlaces temporales de descarga de Aranda."
+                created = self._format_date_long(row.get("Created"))
+                lines.append("")
+                lines.append(f"📎 **{name}**")
+                if size:
+                    lines.append(f"Tamaño: {size}")
+                if created:
+                    lines.append(f"Adjuntado: {created}")
+            lines.extend(
+                [
+                    "",
+                    "Por seguridad, BOTIQ no publica en el chat los enlaces temporales de descarga de Aranda.",
+                ]
             )
         elif files_error:
-            lines.append("No fue posible consultar los adjuntos en esta respuesta.")
+            lines.append("No fue posible consultar los archivos adjuntos en esta respuesta.")
         else:
-            lines.append("No hay adjuntos públicos disponibles.")
+            lines.append("No hay archivos adjuntos públicos disponibles.")
 
         lines.extend(
             [
                 "",
-                "Esta fue una consulta de solo lectura: BOTIQ no modificó el ticket.",
+                "🔒 Esta consulta fue únicamente informativa. BOTIQ no modificó el ticket ni publicó información privada de Aranda.",
             ]
         )
         return "\n".join(lines)
+
+    @classmethod
+    def _normalize_action(cls, value: Any) -> str:
+        action = cls._clean_text(value, 100).upper()
+        action = action.replace("_", " ").replace("-", " ")
+        return " ".join(action.split())
+
+    @classmethod
+    def _translate_action(cls, value: Any) -> str:
+        action = cls._normalize_action(value)
+        if not action:
+            return "Actualización del ticket"
+        return cls.ACTION_LABELS.get(action, action.title())
+
+    @classmethod
+    def _is_attachment_history(cls, row: Dict[str, Any]) -> bool:
+        action = cls._normalize_action(row.get("ActionName"))
+        if action in cls.ATTACHMENT_ACTIONS:
+            return True
+        description = cls._clean_text(row.get("Description"), 300).lower()
+        return "filename:" in description and "attachment" in action.lower()
+
+    @classmethod
+    def _humanize_history_description(cls, row: Dict[str, Any]) -> str:
+        action = cls._normalize_action(row.get("ActionName"))
+        description = cls._clean_text(row.get("Description"), 600)
+
+        if action in {"CREATE ITEM", "REGISTER ITEM"}:
+            return "El requerimiento fue registrado correctamente en Aranda."
+        if action in {"CLOSE ITEM", "RESOLVE ITEM", "SOLUTION ITEM"}:
+            return description or "Aranda registró la solución o cierre del ticket."
+        if action == "REOPEN ITEM":
+            return description or "El ticket fue reabierto para continuar su gestión."
+        if action in {"ASSIGN ITEM", "REASSIGN ITEM"}:
+            return description or "El ticket fue asignado a un responsable de atención."
+        if action in {"CHANGE STATE", "CHANGE STATUS"}:
+            return description or "Aranda registró un cambio en el estado del ticket."
+        if action in {"ADD NOTE", "CREATE NOTE", "NOTE", "NOTA"}:
+            return description or "Se agregó una nueva nota pública al ticket."
+
+        if description:
+            replacements = {
+                "Filename:": "Archivo:",
+                "File name:": "Archivo:",
+                "Size:": "Tamaño:",
+                "Service Request registered:": "Requerimiento registrado:",
+                "Incident registered:": "Incidente registrado:",
+            }
+            for original, translated in replacements.items():
+                description = re.sub(
+                    re.escape(original),
+                    translated,
+                    description,
+                    flags=re.IGNORECASE,
+                )
+            return description
+
+        return "Movimiento registrado sin detalle público."
 
     def _item_types_for(self, reference: TicketReference) -> List[int]:
         if reference.item_type:
@@ -523,7 +689,18 @@ class ArandaTrackingService:
 
     @staticmethod
     def _clean_text(value: Any, max_chars: int) -> str:
-        text = " ".join(str(value or "").replace("<br>", " ").split())
+        text = str(value or "")
+        text = re.sub(
+            r"<(script|style)\b[^>]*>.*?</\1>",
+            " ",
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        text = re.sub(r"<br\s*/?>", " ", text, flags=re.IGNORECASE)
+        text = re.sub(r"</?(p|div|li|ul|ol|tr|td|th)\b[^>]*>", " ", text, flags=re.IGNORECASE)
+        text = re.sub(r"<[^>]+>", "", text)
+        text = html.unescape(text).replace("\xa0", " ")
+        text = " ".join(text.split())
         return text[:max_chars]
 
     @staticmethod
@@ -540,7 +717,23 @@ class ArandaTrackingService:
             number = float(value)
         except (TypeError, ValueError):
             return str(value)
-        return f"{number:g}%"
+        return f"{number:g} %"
+
+    @classmethod
+    def _humanize_level(cls, value: Any) -> Optional[str]:
+        normalized = cls._normalize_text(cls._clean_text(value, 80)).upper()
+        labels = {
+            "BAJO": "Baja",
+            "BAJA": "Baja",
+            "MEDIO": "Media",
+            "MEDIA": "Media",
+            "ALTO": "Alta",
+            "ALTA": "Alta",
+            "CRITICO": "Crítica",
+            "CRITICA": "Crítica",
+            "URGENTE": "Urgente",
+        }
+        return labels.get(normalized, cls._clean_text(value, 80).title() or None)
 
     @staticmethod
     def _format_date(value: Any) -> Optional[str]:
@@ -560,6 +753,30 @@ class ArandaTrackingService:
             return instant.strftime("%d/%m/%Y %I:%M %p").replace("AM", "a. m.").replace("PM", "p. m.")
         except (ValueError, OSError, OverflowError):
             return text[:80]
+
+    @classmethod
+    def _format_date_long(cls, value: Any) -> Optional[str]:
+        formatted = cls._format_date(value)
+        if not formatted:
+            return None
+
+        match = re.fullmatch(
+            r"(?P<day>\d{2})/(?P<month>\d{2})/(?P<year>\d{4}) "
+            r"(?P<hour>\d{2}):(?P<minute>\d{2}) (?P<period>a\. m\.|p\. m\.)",
+            formatted,
+        )
+        if not match:
+            return formatted
+
+        month_index = int(match.group("month")) - 1
+        if month_index < 0 or month_index >= len(cls.MONTHS_ES):
+            return formatted
+
+        return (
+            f"{int(match.group('day'))} de {cls.MONTHS_ES[month_index]} "
+            f"de {match.group('year')} a las {int(match.group('hour'))}:"
+            f"{match.group('minute')} {match.group('period')}"
+        )
 
     @classmethod
     def _sort_history(cls, rows: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:

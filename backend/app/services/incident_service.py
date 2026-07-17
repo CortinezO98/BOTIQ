@@ -24,7 +24,7 @@ from app.models.conversation import Conversation
 from app.models.incident_alert import IncidentAlert
 from app.core.logging_config import get_logger
 
-logger = get_logger(__name__, module="incident_detection")
+logger = get_logger(__name__, service="incident_detection")
 
 INCIDENT_THRESHOLD = 5        # usuarios distintos en la ventana
 INCIDENT_WINDOW_MINUTES = 15  # ventana de tiempo en minutos

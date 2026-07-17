@@ -11,7 +11,7 @@ from app.services.gdrive_service import gdrive_service
 from app.services.vertex.embeddings_service import embeddings_service
 from app.services.vertex.gemini_text_service import gemini_text_service
 
-logger = get_logger(__name__, module="support_rag")
+logger = get_logger(__name__, service="support_rag")
 
 RAG_SYSTEM = """Eres BOTIQ en modo Ingeniero de Soporte.
 

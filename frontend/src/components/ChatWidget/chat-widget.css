@@ -840,3 +840,102 @@
     transition: none !important;
   }
 }
+
+
+/* ── Formato Markdown seguro en respuestas del asistente ─────────────── */
+.botiq-chat-markdown {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.botiq-chat-markdown p {
+  margin: 0;
+}
+
+.botiq-chat-markdown p + p {
+  margin-top: 10px;
+}
+
+.botiq-chat-markdown h4 {
+  margin: 13px 0 6px;
+  color: var(--botiq-heading);
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 850;
+  letter-spacing: -.01em;
+}
+
+.botiq-chat-markdown h4:first-child {
+  margin-top: 0;
+}
+
+.botiq-chat-markdown h4.level-1,
+.botiq-chat-markdown h4.level-2 {
+  font-size: 13px;
+}
+
+.botiq-chat-markdown strong {
+  color: inherit;
+  font-weight: 850;
+}
+
+.botiq-chat-markdown em {
+  color: var(--botiq-muted);
+  font-style: italic;
+}
+
+.botiq-chat-markdown ul,
+.botiq-chat-markdown ol {
+  margin: 7px 0 8px;
+  padding-left: 19px;
+}
+
+.botiq-chat-markdown li {
+  margin: 4px 0;
+  padding-left: 2px;
+}
+
+.botiq-chat-markdown blockquote {
+  margin: 8px 0;
+  padding: 7px 10px;
+  border-left: 3px solid #7469dc;
+  border-radius: 0 8px 8px 0;
+  color: var(--botiq-muted);
+  background: rgba(116, 105, 220, .08);
+}
+
+.botiq-chat-markdown code {
+  padding: 1px 5px;
+  border: 1px solid var(--botiq-border);
+  border-radius: 5px;
+  color: #7c3aed;
+  background: var(--botiq-card-bg);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: .92em;
+}
+
+.botiq-chat-markdown hr {
+  height: 1px;
+  margin: 11px 0;
+  border: 0;
+  background: var(--botiq-border);
+}
+
+/* El título del ticket se distingue sin agrandar excesivamente el widget. */
+.botiq-chat-markdown > p:first-child {
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+@media (max-width: 520px) {
+  .botiq-chat-markdown h4 {
+    margin-top: 11px;
+  }
+
+  .botiq-chat-markdown ul,
+  .botiq-chat-markdown ol {
+    padding-left: 17px;
+  }
+}

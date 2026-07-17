@@ -36,7 +36,7 @@ from app.core.logging_config import get_logger
 from app.models.conversation import Conversation
 from app.models.user import User
 
-logger = get_logger(__name__, module="aranda")
+logger = get_logger(__name__, service="aranda")
 
 JsonValue = Union[None, bool, int, float, str, List[Any], Dict[str, Any]]
 FieldValueArray = List[Dict[str, Any]]

@@ -109,11 +109,33 @@ class _BotiqLogger(logging.LoggerAdapter):
     def process(
         self, msg: str, kwargs: MutableMapping[str, Any]
     ) -> tuple[str, MutableMapping[str, Any]]:
-        extra = dict(self.extra or {})
-        # Todo lo que no sea un argumento estándar de logging lo trata como campo extra
+        # logging.LogRecord reserva nombres como ``module``, ``name``,
+        # ``filename`` y ``message``. Intentar enviarlos dentro de ``extra``
+        # produce:
+        #   KeyError: Attempt to overwrite 'module' in LogRecord
+        #
+        # Sanitizamos tanto los campos base del adapter como los kwargs de cada
+        # evento. Los nombres reservados se conservan con prefijo ``context_``.
+        reserved = set(logging.makeLogRecord({}).__dict__.keys()) | {
+            "message",
+            "asctime",
+        }
+
+        def safe_key(raw_key: Any) -> str:
+            key = str(raw_key)
+            return f"context_{key}" if key in reserved else key
+
+        extra: dict[str, Any] = {
+            safe_key(key): value
+            for key, value in dict(self.extra or {}).items()
+        }
+
+        # Todo lo que no sea un argumento estándar de logging se trata como
+        # campo estructurado adicional.
         for key in list(kwargs.keys()):
             if key not in {"exc_info", "stack_info", "stacklevel"}:
-                extra[key] = kwargs.pop(key)
+                extra[safe_key(key)] = kwargs.pop(key)
+
         kwargs["extra"] = extra
         return msg, kwargs
 

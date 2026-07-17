@@ -664,7 +664,11 @@ function Bubble({ msg, primaryColor, onFeedback }) {
               : undefined
           }
         >
-          {msg.content}
+          {isUser ? (
+            msg.content
+          ) : (
+            <MarkdownMessage content={msg.content} />
+          )}
         </div>
 
         <div className="botiq-chat-meta-row">
@@ -738,6 +742,239 @@ function Bubble({ msg, primaryColor, onFeedback }) {
       </div>
     </div>
   );
+}
+
+
+/**
+ * Renderizador Markdown pequeño y seguro para respuestas de BOTIQ.
+ *
+ * No usa dangerouslySetInnerHTML, por lo que React sigue escapando cualquier
+ * contenido recibido desde el backend. Soporta los elementos que BOTIQ utiliza:
+ * títulos, negrilla, cursiva, código, párrafos, listas y citas.
+ */
+function MarkdownMessage({ content }) {
+  const blocks = parseMarkdownBlocks(content);
+
+  return (
+    <div className="botiq-chat-markdown">
+      {blocks.map((block, blockIndex) => {
+        const key = `${block.type}-${blockIndex}`;
+
+        if (block.type === "heading") {
+          return (
+            <h4 key={key} className={`level-${block.level}`}>
+              {renderInlineMarkdown(block.text, key)}
+            </h4>
+          );
+        }
+
+        if (block.type === "unordered-list") {
+          return (
+            <ul key={key}>
+              {block.items.map((item, itemIndex) => (
+                <li key={`${key}-${itemIndex}`}>
+                  {renderInlineMarkdown(item, `${key}-${itemIndex}`)}
+                </li>
+              ))}
+            </ul>
+          );
+        }
+
+        if (block.type === "ordered-list") {
+          return (
+            <ol key={key}>
+              {block.items.map((item, itemIndex) => (
+                <li key={`${key}-${itemIndex}`}>
+                  {renderInlineMarkdown(item, `${key}-${itemIndex}`)}
+                </li>
+              ))}
+            </ol>
+          );
+        }
+
+        if (block.type === "quote") {
+          return (
+            <blockquote key={key}>
+              {block.lines.map((line, lineIndex) => (
+                <span key={`${key}-${lineIndex}`}>
+                  {renderInlineMarkdown(line, `${key}-${lineIndex}`)}
+                  {lineIndex < block.lines.length - 1 && <br />}
+                </span>
+              ))}
+            </blockquote>
+          );
+        }
+
+        if (block.type === "separator") {
+          return <hr key={key} />;
+        }
+
+        return (
+          <p key={key}>
+            {block.lines.map((line, lineIndex) => (
+              <span key={`${key}-${lineIndex}`}>
+                {renderInlineMarkdown(line, `${key}-${lineIndex}`)}
+                {lineIndex < block.lines.length - 1 && <br />}
+              </span>
+            ))}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function parseMarkdownBlocks(value) {
+  const normalized = String(value ?? "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    // Elimina etiquetas HTML heredadas de Aranda, sin ejecutar HTML.
+    .replace(/<\/?[a-z][^>]*>/gi, "");
+
+  const lines = normalized.split("\n");
+  const blocks = [];
+
+  let paragraphLines = [];
+  let quoteLines = [];
+  let currentList = null;
+
+  const flushParagraph = () => {
+    if (paragraphLines.length > 0) {
+      blocks.push({
+        type: "paragraph",
+        lines: paragraphLines,
+      });
+      paragraphLines = [];
+    }
+  };
+
+  const flushQuote = () => {
+    if (quoteLines.length > 0) {
+      blocks.push({
+        type: "quote",
+        lines: quoteLines,
+      });
+      quoteLines = [];
+    }
+  };
+
+  const flushList = () => {
+    if (currentList?.items.length) {
+      blocks.push(currentList);
+    }
+    currentList = null;
+  };
+
+  const flushAll = () => {
+    flushParagraph();
+    flushQuote();
+    flushList();
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      flushAll();
+      continue;
+    }
+
+    const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      flushAll();
+      blocks.push({
+        type: "heading",
+        level: headingMatch[1].length,
+        text: headingMatch[2],
+      });
+      continue;
+    }
+
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      flushAll();
+      blocks.push({ type: "separator" });
+      continue;
+    }
+
+    const unorderedMatch = trimmed.match(/^[-*]\s+(.+)$/);
+    if (unorderedMatch) {
+      flushParagraph();
+      flushQuote();
+
+      if (currentList?.type !== "unordered-list") {
+        flushList();
+        currentList = {
+          type: "unordered-list",
+          items: [],
+        };
+      }
+
+      currentList.items.push(unorderedMatch[1]);
+      continue;
+    }
+
+    const orderedMatch = trimmed.match(/^\d+[.)]\s+(.+)$/);
+    if (orderedMatch) {
+      flushParagraph();
+      flushQuote();
+
+      if (currentList?.type !== "ordered-list") {
+        flushList();
+        currentList = {
+          type: "ordered-list",
+          items: [],
+        };
+      }
+
+      currentList.items.push(orderedMatch[1]);
+      continue;
+    }
+
+    if (trimmed.startsWith(">")) {
+      flushParagraph();
+      flushList();
+      quoteLines.push(trimmed.replace(/^>\s?/, ""));
+      continue;
+    }
+
+    flushQuote();
+    flushList();
+    paragraphLines.push(trimmed);
+  }
+
+  flushAll();
+
+  return blocks.length
+    ? blocks
+    : [{ type: "paragraph", lines: [""] }];
+}
+
+function renderInlineMarkdown(value, keyPrefix) {
+  const text = String(value ?? "");
+  const tokenPattern = /(\*\*[^*\n]+\*\*|__[^_\n]+__|_[^_\n]+_|`[^`\n]+`)/g;
+  const parts = text.split(tokenPattern).filter((part) => part !== "");
+
+  return parts.map((part, index) => {
+    const key = `${keyPrefix}-inline-${index}`;
+
+    if (
+      (part.startsWith("**") && part.endsWith("**")) ||
+      (part.startsWith("__") && part.endsWith("__"))
+    ) {
+      return <strong key={key}>{part.slice(2, -2)}</strong>;
+    }
+
+    if (part.startsWith("_") && part.endsWith("_")) {
+      return <em key={key}>{part.slice(1, -1)}</em>;
+    }
+
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return <code key={key}>{part.slice(1, -1)}</code>;
+    }
+
+    return part;
+  });
 }
 
 function SatisfactionModal({ primaryColor, onSubmit, onSkip }) {
