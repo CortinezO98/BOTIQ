@@ -107,21 +107,76 @@ export default function KnowledgeBasePage() {
 
   const startPolling = () => {
     let attempts = 0;
+    // 480 x 5s = 40 minutos. Es una salvaguarda, no el criterio real de
+    // parada -- el criterio real es sync_in_progress volviendo a false.
+    // Documentos grandes (cientos de fragmentos) generan un embedding por
+    // fragmento, uno por uno, y eso puede tardar bastante en un force=true
+    // sobre toda la base.
+    const MAX_ATTEMPTS = 480;
 
     if (pollRef.current) clearInterval(pollRef.current);
 
     pollRef.current = setInterval(async () => {
       attempts += 1;
-      await loadAll({ quiet: true });
 
-      if (attempts >= 6) {
+      let statusResponse;
+      try {
+        const [statusRes, documentsRes] = await Promise.all([
+          supportAPI.status(),
+          supportAPI.documents(),
+        ]);
+        statusResponse = statusRes;
+
+        setStatus(statusRes.data);
+        setDocsData({
+          summary: documentsRes.data?.summary || null,
+          documents: Array.isArray(documentsRes.data?.documents)
+            ? documentsRes.data.documents
+            : [],
+        });
+      } catch (error) {
+        // Un fallo puntual de red no debe cortar el seguimiento; seguimos
+        // intentando hasta el límite de intentos.
+        return;
+      }
+
+      const stillRunning = Boolean(statusResponse.data?.sync_in_progress);
+      const timedOut = attempts >= MAX_ATTEMPTS;
+
+      if (!stillRunning || timedOut) {
         clearInterval(pollRef.current);
         pollRef.current = null;
         setSyncing(false);
-        setMessage({
-          type: "success",
-          text: "Sincronización finalizada. La información fue actualizada.",
-        });
+
+        const lastError = statusResponse.data?.last_sync_error;
+        const lastResult = statusResponse.data?.last_sync_result;
+
+        if (timedOut && stillRunning) {
+          setMessage({
+            type: "error",
+            text:
+              "La sincronización lleva mucho tiempo corriendo. Se detuvo el seguimiento automático, pero puede seguir en curso en el backend -- revisa los logs o refresca en unos minutos.",
+          });
+        } else if (lastError) {
+          setMessage({
+            type: "error",
+            text: `La sincronización falló: ${lastError}`,
+          });
+        } else if (lastResult) {
+          const failedCount = Number(lastResult.errors || 0);
+          setMessage({
+            type: failedCount > 0 ? "error" : "success",
+            text:
+              failedCount > 0
+                ? `Sincronización finalizada con ${failedCount} documento(s) con error. Revisa las tarjetas marcadas en rojo abajo.`
+                : `Sincronización finalizada. ${lastResult.indexed_new || 0} nuevos, ${lastResult.reindexed || 0} reindexados, ${lastResult.skipped_unchanged || 0} sin cambios.`,
+          });
+        } else {
+          setMessage({
+            type: "success",
+            text: "Sincronización finalizada. La información fue actualizada.",
+          });
+        }
       }
     }, 5000);
   };
@@ -133,6 +188,16 @@ export default function KnowledgeBasePage() {
 
     try {
       const { data } = await supportAPI.sync(force);
+
+      if (data.already_running) {
+        setMessage({
+          type: "info",
+          text: data.message || "Ya hay una sincronización en curso.",
+        });
+        // Seguimos el progreso de la que ya está corriendo, no lanzamos otra.
+        startPolling();
+        return;
+      }
 
       setMessage({
         type: "info",

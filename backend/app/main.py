@@ -8,6 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 
 from app.api.v1 import router as api_v1_router
+from app.api.v1.routes.support import start_scheduler, stop_scheduler
 from app.core.config import settings
 from app.core.logging_config import setup_logging, get_logger
 from app.core.rate_limit import limiter
@@ -29,7 +30,9 @@ async def lifespan(app: FastAPI):
         login_rate_limit=settings.LOGIN_RATE_LIMIT,
         chat_rate_limit=settings.CHAT_RATE_LIMIT,
     )
+    start_scheduler()
     yield
+    stop_scheduler()
     logger.info("botiq_shutdown", app=settings.APP_NAME)
 
 
