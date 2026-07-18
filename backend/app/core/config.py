@@ -135,6 +135,15 @@ class Settings(BaseSettings):
     GDRIVE_SERVERS_FILE_ID: str = ""
     GDRIVE_SERVERS_FILE_IDS: str = ""
 
+    # gid de la pestaña específica dentro del archivo de Google Sheets que
+    # contiene la tabla de servidores (memoria/RAM/disco/estado). Necesario
+    # porque el export genérico de Drive a CSV siempre trae la PRIMERA
+    # pestaña, sin importar cuál esté configurada como GDRIVE_SERVERS_FILE_ID
+    # -- si la tabla vive en otra pestaña, hay que decirle explícitamente
+    # cuál leer. Se obtiene del parámetro ?gid=NUMERO en la URL del Sheet.
+    # Vacío = usa el comportamiento viejo (export CSV de la primera pestaña).
+    GDRIVE_SERVERS_SHEET_GID: str = ""
+
     # API externa de estados / disponibilidad de aplicativos.
     # Esta API es insumo interno del bot, no se expone directamente al usuario.
     APPLICATION_STATUS_API_URL: str = ""

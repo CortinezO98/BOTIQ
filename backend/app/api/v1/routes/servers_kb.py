@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_support
@@ -36,6 +37,10 @@ _last_sync_finished_at: Optional[str] = None
 _last_sync_trigger: Optional[str] = None  # "manual" | "scheduled"
 
 _scheduler_task: Optional[asyncio.Task] = None
+
+
+class AskRequest(BaseModel):
+    message: str
 
 
 async def _run_sync(force: bool, trigger: str = "manual"):
@@ -113,20 +118,20 @@ async def sync_servers_kb(
     _: User = Depends(require_support),
 ):
     """
-    Sincroniza la base de conocimiento de SERVIDORES desde su carpeta de
-    Drive (GDRIVE_SERVERS_FOLDER_ID / GDRIVE_SERVERS_FOLDER_IDS). Ejecuta en
-    background. Además corre automáticamente cada 30 minutos (ver
-    start_scheduler) para reflejar la hoja de memoria/RAM sin depender de
-    que alguien le dé clic.
+    Sincroniza la base de conocimiento de SERVIDORES desde su carpeta/archivo
+    de Drive. Ejecuta en background. Además corre automáticamente cada 30
+    minutos (ver start_scheduler) para reflejar la hoja de memoria/RAM sin
+    depender de que alguien le dé clic.
     """
     if not servers_kb_service.is_configured():
         return {
             "message": "Google Drive no configurado para la base de servidores",
             "instructions": [
-                "1. Crea/identifica la carpeta de servidores en Google Drive",
-                "2. Compártela con el Service Account (Lector)",
-                "3. Agrega GDRIVE_SERVERS_FOLDER_ID (o GDRIVE_SERVERS_FOLDER_IDS) en backend/.env",
-                "4. Reinicia el backend",
+                "1. Crea/identifica la carpeta o archivo de servidores en Google Drive",
+                "2. Compártelo con el Service Account (Lector)",
+                "3. Agrega GDRIVE_SERVERS_FOLDER_ID(S) y/o GDRIVE_SERVERS_FILE_ID(S) en backend/.env",
+                "4. Si la tabla vive en una pestaña que no es la primera, agrega GDRIVE_SERVERS_SHEET_GID",
+                "5. Reinicia el backend",
             ],
         }
 
@@ -161,6 +166,7 @@ async def servers_kb_status(_: User = Depends(require_support)):
             "drive_folder_ids": folder_ids or ["No configurado"],
             "drive_file_count": len(file_ids),
             "drive_file_ids": file_ids or ["No configurado"],
+            "sheet_gid": settings.GDRIVE_SERVERS_SHEET_GID or None,
             "sync_in_progress": _sync_in_progress,
             "last_sync_result": _last_sync_result,
             "last_sync_error": _last_sync_error,
@@ -196,3 +202,17 @@ async def servers_kb_reindex_document(
 ):
     """Reindexa un único documento de servidores por su file_id de Google Drive."""
     return await servers_kb_service.reindex_document(db, file_id)
+
+
+@router.post("/ask")
+async def servers_kb_ask(
+    body: AskRequest,
+    _: User = Depends(require_support),
+):
+    """
+    Endpoint de PRUEBA para validar la KB de servidores sin esperar a que
+    esté conectada al chat real (Employee Bot / Support). Úsalo para
+    confirmar que la sincronización quedó bien antes de la integración
+    final. Ej: {"message": "¿cómo está el servidor AGNES?"}
+    """
+    return await servers_kb_service.generate_response(body.message)

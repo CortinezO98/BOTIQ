@@ -14,20 +14,21 @@ PASO 1: Crear Service Account en Google Cloud
 PASO 2: Habilitar las APIs en Google Cloud
   - APIs y servicios → Biblioteca → habilitar:
       • Google Drive API
+      • Google Sheets API (necesaria para leer pestañas específicas por gid)
       • Vertex AI API
       • (Opcional, PDFs escaneados) Document AI API
 
 PASO 3: Compartir con el Service Account
   - Carpeta completa: Compartir → email del service account → Lector.
-    Las subcarpetas se heredan y se recorren de forma recursiva.
   - Archivo suelto (sin carpeta): igual, Compartir → email del service
     account → Lector, directo sobre el archivo.
 
-PASO 4: Obtener el ID
+PASO 4: Obtener el ID (y el gid, si aplica)
   - Carpeta:  drive.google.com/drive/folders/ESTE_ES_EL_ID
-  - Archivo:  docs.google.com/spreadsheets/d/ESTE_ES_EL_ID/edit (o /document/d/, etc.)
-  - Carpeta → GDRIVE_FOLDER_ID / GDRIVE_SERVERS_FOLDER_ID en .env
-  - Archivo suelto → GDRIVE_SERVERS_FILE_ID en .env
+  - Archivo:  docs.google.com/spreadsheets/d/ESTE_ES_EL_ID/edit
+  - Pestaña específica de un Sheet: .../edit?gid=ESTE_ES_EL_GID#gid=...
+    (si la tabla que te interesa NO está en la primera pestaña, necesitas
+    el gid -- de lo contrario el export trae la pestaña equivocada)
 
 PASO 5: Sincronizar
   - Soporte:    POST /api/v1/support/sync-knowledge-base
@@ -35,7 +36,8 @@ PASO 5: Sincronizar
 
 TIPOS DE ARCHIVO SOPORTADOS:
   ✅ Google Docs        → exportado como texto plano
-  ✅ Google Sheets      → exportado como CSV
+  ✅ Google Sheets      → exportado como CSV (primera pestaña) o, si se
+                          configura un gid, leído por Sheets API (pestaña exacta)
   ✅ .txt / .csv        → texto directo
   ✅ .xlsx / .xls       → todas las hojas extraídas como texto (openpyxl)
   ✅ .pdf digital       → extracción automática
@@ -45,11 +47,7 @@ TIPOS DE ARCHIVO SOPORTADOS:
 NOTA: este servicio es genérico -- no está atado a una sola base de
 conocimiento. Cada método acepta `folder_ids` y `file_ids` opcionales; si no
 se pasan, usa por compatibilidad las carpetas de soporte
-(settings.get_gdrive_folder_ids()). El módulo de servidores
-(app/modules/servers_kb/service.py) pasa explícitamente
-settings.get_servers_folder_ids() + settings.get_servers_file_ids().
-Un mismo documento puede llegar por carpeta recorrida recursivamente, por ID
-directo, o por ambas fuentes a la vez -- se deduplica siempre por file_id.
+(settings.get_gdrive_folder_ids()).
 ═══════════════════════════════════════════════════════════
 """
 
@@ -77,6 +75,7 @@ class GoogleDriveService:
 
     def __init__(self):
         self._service = None
+        self._sheets_service = None
 
     def _get_service(self):
         """Construye el cliente de Google Drive usando Service Account."""
@@ -95,10 +94,19 @@ class GoogleDriveService:
 
             creds = service_account.Credentials.from_service_account_file(
                 settings.GOOGLE_APPLICATION_CREDENTIALS,
-                scopes=["https://www.googleapis.com/auth/drive.readonly"],
+                scopes=[
+                    "https://www.googleapis.com/auth/drive.readonly",
+                    "https://www.googleapis.com/auth/spreadsheets.readonly",
+                ],
             )
             self._service = build("drive", "v3", credentials=creds, cache_discovery=False)
+            self._sheets_service = build("sheets", "v4", credentials=creds, cache_discovery=False)
         return self._service
+
+    def _get_sheets_service(self):
+        if self._sheets_service is None:
+            self._get_service()  # construye ambos clientes con las mismas credenciales
+        return self._sheets_service
 
     def _list_folder_raw(self, folder_id: str) -> List[Dict]:
         """Lista todos los hijos directos de una carpeta (con paginación)."""
@@ -217,7 +225,8 @@ class GoogleDriveService:
             if mime_type == "application/vnd.google-apps.document":
                 request = service.files().export_media(fileId=file_id, mimeType="text/plain")
             elif mime_type == "application/vnd.google-apps.spreadsheet":
-                # Google Sheets nativo → exportar como CSV (primera hoja).
+                # Google Sheets nativo → exportar como CSV (SIEMPRE la primera
+                # pestaña -- si necesitas otra, usa get_sheet_tab_rows() con gid).
                 request = service.files().export_media(fileId=file_id, mimeType="text/csv")
             else:
                 request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
@@ -230,6 +239,46 @@ class GoogleDriveService:
             return buffer.getvalue()
         except Exception as e:  # noqa: BLE001
             print(f"❌ Error descargando {file_id}: {e}")
+            return None
+
+    def get_sheet_tab_rows(self, file_id: str, gid: str) -> Optional[Dict]:
+        """
+        Lee una pestaña ESPECÍFICA de un Google Sheet por su gid, usando la
+        API de Sheets (no el export genérico de Drive, que solo trae la
+        primera pestaña). Devuelve {"headers": [...], "rows": [[...], ...]}
+        o None si no se pudo leer.
+        """
+        try:
+            sheets = self._get_sheets_service()
+
+            # 1) Mapear gid -> nombre real de la pestaña.
+            meta = sheets.spreadsheets().get(
+                spreadsheetId=file_id, fields="sheets.properties"
+            ).execute()
+            sheet_title = None
+            for s in meta.get("sheets", []):
+                props = s.get("properties", {})
+                if str(props.get("sheetId")) == str(gid):
+                    sheet_title = props.get("title")
+                    break
+
+            if not sheet_title:
+                print(f"❌ No se encontró la pestaña con gid={gid} en el archivo {file_id}")
+                return None
+
+            # 2) Traer todos los valores de esa pestaña.
+            result = sheets.spreadsheets().values().get(
+                spreadsheetId=file_id, range=sheet_title
+            ).execute()
+            values = result.get("values", [])
+            if not values:
+                return {"headers": [], "rows": []}
+
+            headers = values[0]
+            rows = values[1:]
+            return {"headers": headers, "rows": rows, "sheet_title": sheet_title}
+        except Exception as e:  # noqa: BLE001
+            print(f"❌ Error leyendo pestaña gid={gid} de {file_id}: {e}")
             return None
 
     @staticmethod
@@ -264,8 +313,13 @@ class GoogleDriveService:
         carpetas (`folder_ids`) y archivos sueltos (`file_ids`).
         - PDF: retorna bytes para Document AI.
         - XLSX/XLS: convierte a texto con openpyxl.
-        - Google Sheets / Docs: exportado y decodificado como texto.
+        - Google Sheets / Docs: exportado y decodificado como texto (primera pestaña).
         - Resto: texto decodificado.
+
+        NOTA: para leer una pestaña específica de un Google Sheet por gid, no
+        uses este método -- usa gdrive_service.get_sheet_tab_rows() directo,
+        como hace servers_kb/service.py cuando settings.GDRIVE_SERVERS_SHEET_GID
+        está configurado.
         """
         docs = await self.list_documents(folder_ids=folder_ids, file_ids=file_ids)
         result: List[Dict] = []

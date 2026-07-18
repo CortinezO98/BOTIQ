@@ -17,19 +17,20 @@ logger = get_logger(__name__, service="servers_kb")
 # Prompt genérico de retrieval-only para esta KB. Cuando se conecte al flujo
 # de chat real (Employee Bot / Support), este system prompt se reemplaza o
 # se parametriza por rol -- por ahora sirve para probar el módulo de forma
-# independiente vía sus propios endpoints.
+# independiente vía sus propios endpoints (incluyendo POST /servers-kb/ask).
 SERVERS_RAG_SYSTEM = """Eres BOTIQ respondiendo sobre el estado de servidores e infraestructura.
 
-Base de conocimiento disponible:
+Base de conocimiento disponible (cada bloque es el estado más reciente de UN servidor):
 {knowledge_context}
 
 Reglas:
-1. Responde SOLO con base en el contexto recibido (memoria/RAM, estado de servidores).
+1. Responde SOLO con base en el contexto recibido (memoria/RAM, CPU, disco, estado de servidores).
 2. Si citas una fuente, menciona solo el nombre del documento en una línea al final
    (ej. "Fuente: Reporte servidores"), en texto plano, sin corchetes.
-3. Si el contexto no es suficiente o está desactualizado, dilo claramente.
-4. Sé breve y directo con los datos técnicos (nombre de servidor, % de memoria, estado).
+3. Si el contexto no es suficiente, está desactualizado, o el servidor no aparece, dilo claramente.
+4. Sé breve y directo con los datos técnicos (nombre de servidor, % de memoria/CPU/disco, estado).
 5. No inventes servidores, valores ni umbrales que no estén en el contexto.
+6. Si el servidor figura como "Inalcanzable", dilo explícitamente -- no asumas que está bien ni mal.
 """
 
 NO_KNOWLEDGE = (
@@ -51,11 +52,17 @@ def _strip_leaked_context_markers(text: str) -> str:
 class ServersKnowledgeService:
     """
     Sincronización + recuperación de la base de conocimiento de SERVIDORES
-    (memoria/RAM, estado), independiente de support_rag_service: carpeta(s)
-    y/o archivo(s) sueltos de Drive propios (settings.get_servers_folder_ids()
-    + settings.get_servers_file_ids()), colección propia de ChromaDB
-    (settings.CHROMA_SERVERS_COLLECTION_NAME) y tabla propia
-    (server_knowledge_documents).
+    (memoria/RAM, CPU, disco, estado), independiente de support_rag_service:
+    carpeta(s) y/o archivo(s) sueltos de Drive propios
+    (settings.get_servers_folder_ids() + settings.get_servers_file_ids()),
+    colección propia de ChromaDB (settings.CHROMA_SERVERS_COLLECTION_NAME) y
+    tabla propia (server_knowledge_documents).
+
+    Si settings.GDRIVE_SERVERS_SHEET_GID está configurado, la tabla se lee
+    fila por fila desde esa pestaña exacta del Google Sheet (vía Sheets API)
+    y cada servidor se indexa como UN chunk completo -- evita que el
+    chunking genérico por palabras corte una fila a la mitad y mezcle datos
+    de dos servidores distintos en la misma respuesta.
     """
 
     def __init__(self):
@@ -86,8 +93,45 @@ class ServersKnowledgeService:
     def _hash_text(text: str) -> str:
         return hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()
 
+    @staticmethod
+    def _row_to_block(headers: List[str], row: List[str]) -> str:
+        """
+        Convierte una fila de la tabla de servidores en un bloque de texto
+        legible tipo "Campo: valor", con todas las columnas presentes
+        (incluso las que quedaron vacías por un servidor "Inalcanzable").
+        """
+        parts = []
+        for i, header in enumerate(headers):
+            value = row[i].strip() if i < len(row) and row[i] is not None else ""
+            if not value:
+                value = "sin dato"
+            parts.append(f"{header.strip()}: {value}")
+        return " | ".join(parts)
+
+    async def _extract_row_chunks(self, doc: Dict) -> Optional[List[str]]:
+        """
+        Si el documento es el Google Sheet configurado con
+        GDRIVE_SERVERS_SHEET_GID, lee la pestaña exacta por gid y devuelve
+        UNA lista de chunks, uno por fila/servidor. None si no aplica (se
+        usa el flujo de extracción/chunking genérico en su lugar).
+        """
+        gid = settings.GDRIVE_SERVERS_SHEET_GID.strip()
+        if not gid or doc.get("doc_type") != "google_sheet":
+            return None
+
+        sheet = gdrive_service.get_sheet_tab_rows(doc["file_id"], gid)
+        if not sheet or not sheet.get("rows"):
+            logger.warning("sheet_tab_empty_or_unreadable", doc=doc.get("name"), gid=gid)
+            return None
+
+        headers = sheet["headers"]
+        chunks = [self._row_to_block(headers, row) for row in sheet["rows"] if any(c.strip() for c in row if c)]
+        logger.info("sheet_tab_read", doc=doc.get("name"), gid=gid, rows=len(chunks), sheet_title=sheet.get("sheet_title"))
+        return chunks
+
     async def _extract_text(self, doc: Dict) -> str:
-        """Devuelve el texto de un documento (mismo criterio que support_rag)."""
+        """Devuelve el texto de un documento (mismo criterio que support_rag),
+        para los casos que NO usan el chunking por fila (_extract_row_chunks)."""
         if doc.get("doc_type") == "pdf" and doc.get("bytes"):
             pdf_bytes = doc["bytes"]
 
@@ -127,8 +171,14 @@ class ServersKnowledgeService:
         except Exception as exc:  # noqa: BLE001
             logger.warning("chroma_delete_failed", file_id=file_id, error=str(exc))
 
-    async def _index_document(self, collection, doc: Dict, text: str) -> int:
-        chunks = self._chunk_text(text)
+    async def _index_document(self, collection, doc: Dict, text: str, row_chunks: Optional[List[str]] = None) -> int:
+        """
+        Indexa un documento. Si `row_chunks` viene dado (un bloque completo
+        por servidor), se usa tal cual -- es el caso de la hoja de
+        memoria/RAM. Si no, se aplica el chunking genérico por palabras
+        (documentos de texto libre, PDFs, etc.).
+        """
+        chunks = row_chunks if row_chunks is not None else self._chunk_text(text)
         self._delete_chunks_for_file(collection, doc["file_id"])
 
         for i, chunk in enumerate(chunks):
@@ -157,9 +207,7 @@ class ServersKnowledgeService:
         """
         Sincroniza la base de conocimiento de SERVIDORES desde Google Drive
         (carpetas + archivos sueltos), de forma incremental por defecto
-        (solo documentos nuevos o cuyo hash de contenido cambió). Mismo
-        comportamiento que support_rag_service, apuntando a su propia
-        fuente/colección/tabla.
+        (solo documentos nuevos o cuyo hash de contenido cambió).
         """
         folder_ids = settings.get_servers_folder_ids()
         file_ids = settings.get_servers_file_ids()
@@ -192,8 +240,15 @@ class ServersKnowledgeService:
             row = by_file.get(file_id)
 
             try:
-                text = await self._extract_text(doc)
-                if not text.strip():
+                # Camino especial: hoja de servidores leída fila por fila por gid.
+                row_chunks = await self._extract_row_chunks(doc)
+
+                if row_chunks is not None:
+                    text_for_hash = "\n".join(row_chunks)
+                else:
+                    text_for_hash = await self._extract_text(doc)
+
+                if not text_for_hash.strip():
                     logger.warning("doc_no_content", doc=doc["name"])
                     self._upsert_doc_record(
                         db, row, doc, content_hash=None, chunk_count=0,
@@ -202,7 +257,7 @@ class ServersKnowledgeService:
                     errors += 1
                     continue
 
-                new_hash = self._hash_text(text)
+                new_hash = self._hash_text(text_for_hash)
                 unchanged = (
                     row is not None
                     and row.status == "indexed"
@@ -215,7 +270,7 @@ class ServersKnowledgeService:
                     logger.debug("doc_skipped_unchanged", doc=doc["name"])
                     continue
 
-                chunk_count = await self._index_document(collection, doc, text)
+                chunk_count = await self._index_document(collection, doc, text_for_hash, row_chunks=row_chunks)
                 self._upsert_doc_record(
                     db, row, doc, content_hash=new_hash, chunk_count=chunk_count,
                     status="indexed", error=None, mark_indexed=True,
@@ -278,15 +333,17 @@ class ServersKnowledgeService:
         ).scalar_one_or_none()
 
         try:
-            text = await self._extract_text(doc)
-            if not text.strip():
+            row_chunks = await self._extract_row_chunks(doc)
+            text_for_hash = "\n".join(row_chunks) if row_chunks is not None else await self._extract_text(doc)
+
+            if not text_for_hash.strip():
                 self._upsert_doc_record(db, row, doc, content_hash=None, chunk_count=0, status="failed", error="Sin contenido extraíble")
                 await db.commit()
                 return {"status": "failed", "message": "Sin contenido extraíble"}
 
-            chunk_count = await self._index_document(collection, doc, text)
+            chunk_count = await self._index_document(collection, doc, text_for_hash, row_chunks=row_chunks)
             self._upsert_doc_record(
-                db, row, doc, content_hash=self._hash_text(text), chunk_count=chunk_count,
+                db, row, doc, content_hash=self._hash_text(text_for_hash), chunk_count=chunk_count,
                 status="indexed", error=None, mark_indexed=True,
             )
             await db.commit()
@@ -394,8 +451,7 @@ class ServersKnowledgeService:
     ) -> Dict:
         """
         Genera una respuesta usando solo el contexto de la KB de servidores.
-        Placeholder funcional para probar el módulo de forma independiente;
-        cuando se conecte al chat real, el system prompt se parametriza por
+        Cuando se conecte al chat real, el system prompt se parametriza por
         rol (empleado vs. ingeniero de soporte) manteniendo el mismo dato
         técnico recuperado acá.
         """
