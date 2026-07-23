@@ -28,17 +28,14 @@ function isAuthEndpoint(url = "") {
   return url.includes("/auth/login") || url.includes("/auth/refresh") || url.includes("/auth/register");
 }
 
-// Widget embebible (embed/widget-entry.jsx): cuando BOTIQ corre en un
-// dominio de terceros, las cookies httpOnly no viajan cross-site de todas
-// formas (restricción de navegador, no un bug), así que ese caso de uso
-// pasa un JWT manual vía BotiqWidget.init({ authToken }), que queda en
-// localStorage["botiq_token"]. Si existe, se manda como Authorization
-// header — el backend ya acepta header O cookie (ver api/deps.py). Para
-// la app principal esto es un no-op: nada vuelve a escribir esa clave
-// desde la migración a cookies (1.6.0), así que header nunca se agrega.
+// La aplicación principal se autentica exclusivamente con cookies httpOnly.
+// El widget embebible usa un token en memoria, no localStorage. Esto evita
+// que un JWT antiguo de versiones previas tenga prioridad sobre la cookie
+// válida y provoque 401 después de iniciar sesión.
 api.interceptors.request.use((config) => {
-  const embedToken = localStorage.getItem("botiq_token");
+  const embedToken = window.__BOTIQ_EMBED_AUTH_TOKEN__;
   if (embedToken) {
+    config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${embedToken}`;
   }
   return config;
@@ -149,6 +146,15 @@ export const supportAPI = {
 export const serversAPI = {
   status: () => api.get("/servers/status"),
   analysis: () => api.get("/servers/analysis"),
+};
+
+export const serversKnowledgeAPI = {
+  sync: (force = false) => api.post(`/servers-kb/sync-knowledge-base?force=${force}`),
+  status: () => api.get("/servers-kb/knowledge-base/status"),
+  documents: () => api.get("/servers-kb/knowledge-base/documents"),
+  reindexDocument: (fileId) =>
+    api.post(`/servers-kb/knowledge-base/documents/${fileId}/reindex`, null, { timeout: 120000 }),
+  ask: (message) => api.post("/servers-kb/ask", { message }, { timeout: 60000 }),
 };
 
 export const dashboardAPI = {

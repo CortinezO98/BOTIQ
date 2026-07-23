@@ -61,6 +61,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    // Limpia credenciales heredadas de la versión que guardaba JWT en
+    // localStorage. La sesión actual vive únicamente en cookies httpOnly.
+    localStorage.removeItem("botiq_token");
+    localStorage.removeItem("botiq_user");
     syncUser();
   }, [syncUser]);
 
@@ -112,6 +116,8 @@ export function AuthProvider({ children }) {
     } catch {
       // Si el backend no responde, igual limpiamos el estado local.
     }
+    localStorage.removeItem("botiq_token");
+    localStorage.removeItem("botiq_user");
     setUser(null);
     window.location.href = "/login";
   }, []);

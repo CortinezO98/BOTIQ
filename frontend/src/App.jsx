@@ -83,6 +83,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/dashboard/knowledge-base/servers"
+        element={
+          <Guard adminOnly>
+            <KnowledgeBasePage source="servers" />
+          </Guard>
+        }
+      />
+      <Route
         path="/dashboard/conversation-logs"
         element={
           <Guard adminOnly>

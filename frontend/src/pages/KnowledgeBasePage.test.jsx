@@ -63,6 +63,37 @@ vi.mock("../services/api", () => ({
       },
     }),
   },
+  serversKnowledgeAPI: {
+    status: vi.fn().mockResolvedValue({
+      data: {
+        status: "active",
+        total_chunks: 42,
+        drive_configured: true,
+        drive_folder_count: 0,
+        drive_folder_ids: [],
+        drive_file_count: 1,
+        drive_file_ids: ["server-sheet-1"],
+        sheet_gid: "123456",
+      },
+    }),
+    documents: vi.fn().mockResolvedValue({
+      data: {
+        summary: { total: 1, indexed: 1, failed: 0, total_chunks: 42 },
+        documents: [{
+          file_id: "server-sheet-1",
+          file_name: "Inventario servidores",
+          doc_type: "google_sheet",
+          chunk_count: 42,
+          status: "indexed",
+          error_message: null,
+          drive_modified_at: "2026-07-23T10:00:00Z",
+          last_indexed_at: "2026-07-23T10:30:00Z",
+        }],
+      },
+    }),
+    sync: vi.fn().mockResolvedValue({ data: { message: "Sincronización iniciada" } }),
+    reindexDocument: vi.fn().mockResolvedValue({ data: { status: "indexed", chunk_count: 42 } }),
+  },
 }));
 
 vi.mock("../hooks/useAuth", () => ({
@@ -88,6 +119,7 @@ vi.mock("../hooks/useSidebar", () => ({
 }));
 
 import KnowledgeBasePage from "./KnowledgeBasePage";
+import { serversKnowledgeAPI, supportAPI } from "../services/api";
 
 afterEach(() => {
   cleanup();
@@ -151,4 +183,43 @@ describe("KnowledgeBasePage profesional", () => {
       screen.getByText("Sincronización incremental recomendada"),
     ).toBeInTheDocument();
   });
+  it("muestra el RAG independiente de servidores y su archivo directo", async () => {
+    render(
+      <MemoryRouter initialEntries={["/dashboard/knowledge-base/servers"]}>
+        <KnowledgeBasePage source="servers" />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Inventario servidores")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Base de conocimiento de servidores")).toBeInTheDocument();
+    expect(screen.getByText("Fuentes conectadas")).toBeInTheDocument();
+    expect(screen.getByText("Archivos directos")).toBeInTheDocument();
+  });
+
+  it("recarga la fuente correcta al cambiar de soporte a servidores", async () => {
+    const { rerender } = render(
+      <MemoryRouter initialEntries={["/dashboard/knowledge-base"]}>
+        <KnowledgeBasePage source="support" />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(supportAPI.status).toHaveBeenCalled();
+    });
+
+    rerender(
+      <MemoryRouter initialEntries={["/dashboard/knowledge-base/servers"]}>
+        <KnowledgeBasePage source="servers" />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(serversKnowledgeAPI.status).toHaveBeenCalled();
+      expect(screen.getByText("Inventario servidores")).toBeInTheDocument();
+    });
+  });
+
 });

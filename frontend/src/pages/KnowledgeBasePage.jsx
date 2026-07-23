@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { NavLink } from "react-router-dom";
 import {
   AlertCircle,
   BookOpenCheck,
@@ -24,8 +25,33 @@ import {
 } from "lucide-react";
 
 import AppShell from "../components/Layout/AppShell";
-import { supportAPI } from "../services/api";
+import { serversKnowledgeAPI, supportAPI } from "../services/api";
 import "../components/KnowledgeBase/knowledge-base.css";
+
+const KNOWLEDGE_SOURCES = {
+  support: {
+    api: supportAPI,
+    currentPage: "knowledge-base",
+    eyebrow: "RAG corporativo de soporte",
+    title: "Base de conocimiento de soporte",
+    description:
+      "Supervisa los manuales, procedimientos y archivos de soporte indexados desde Google Drive.",
+    sourceTitle: "Google Drive de soporte",
+    metricLabel: "Carpetas conectadas",
+    emptyDescription: "la base de conocimiento de soporte",
+  },
+  servers: {
+    api: serversKnowledgeAPI,
+    currentPage: "servers-knowledge-base",
+    eyebrow: "RAG especializado de infraestructura",
+    title: "Base de conocimiento de servidores",
+    description:
+      "Supervisa el archivo de Google Drive con la información consolidada de servidores, memoria, RAM, disco y estado operativo.",
+    sourceTitle: "Inventario de servidores en Google Drive",
+    metricLabel: "Fuentes conectadas",
+    emptyDescription: "la base de conocimiento de servidores",
+  },
+};
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Todos los estados" },
@@ -47,7 +73,9 @@ const TYPE_OPTIONS = [
 
 const PAGE_SIZE_OPTIONS = [8, 12, 24, 48];
 
-export default function KnowledgeBasePage() {
+export default function KnowledgeBasePage({ source = "support" }) {
+  const config = KNOWLEDGE_SOURCES[source] || KNOWLEDGE_SOURCES.support;
+  const knowledgeAPI = config.api;
   const [status, setStatus] = useState(null);
   const [docsData, setDocsData] = useState({ summary: null, documents: [] });
   const [loading, setLoading] = useState(true);
@@ -65,13 +93,13 @@ export default function KnowledgeBasePage() {
   const [confirmSync, setConfirmSync] = useState(null);
   const pollRef = useRef(null);
 
-  const loadAll = async ({ quiet = false } = {}) => {
+  const loadAll = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setLoading(true);
 
     try {
       const [statusResponse, documentsResponse] = await Promise.all([
-        supportAPI.status(),
-        supportAPI.documents(),
+        knowledgeAPI.status(),
+        knowledgeAPI.documents(),
       ]);
 
       setStatus(statusResponse.data);
@@ -91,15 +119,29 @@ export default function KnowledgeBasePage() {
     } finally {
       if (!quiet) setLoading(false);
     }
-  };
+  }, [knowledgeAPI]);
 
   useEffect(() => {
+    // React puede conservar este componente al navegar entre ambas rutas.
+    // Limpiamos la fuente anterior y consultamos el API correspondiente.
+    setStatus(null);
+    setDocsData({ summary: null, documents: [] });
+    setMessage(null);
+    setSearch("");
+    setStatusFilter("all");
+    setTypeFilter("all");
+    setSortBy("name_asc");
+    setPage(1);
+    setLoading(true);
     loadAll();
 
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
     };
-  }, []);
+  }, [loadAll]);
 
   useEffect(() => {
     setPage(1);
@@ -122,8 +164,8 @@ export default function KnowledgeBasePage() {
       let statusResponse;
       try {
         const [statusRes, documentsRes] = await Promise.all([
-          supportAPI.status(),
-          supportAPI.documents(),
+          knowledgeAPI.status(),
+          knowledgeAPI.documents(),
         ]);
         statusResponse = statusRes;
 
@@ -187,7 +229,7 @@ export default function KnowledgeBasePage() {
     setMessage(null);
 
     try {
-      const { data } = await supportAPI.sync(force);
+      const { data } = await knowledgeAPI.sync(force);
 
       if (data.already_running) {
         setMessage({
@@ -226,7 +268,7 @@ export default function KnowledgeBasePage() {
     setMessage(null);
 
     try {
-      const { data } = await supportAPI.reindexDocument(document.file_id);
+      const { data } = await knowledgeAPI.reindexDocument(document.file_id);
 
       if (data.status === "indexed") {
         setMessage({
@@ -266,13 +308,18 @@ export default function KnowledgeBasePage() {
     ),
   };
 
+  const driveFolderIds = normalizeDriveIds(status?.drive_folder_ids);
+  const driveFileIds = normalizeDriveIds(status?.drive_file_ids);
+
   const metrics = {
     total: Number(summary.total || 0),
     indexed: Number(summary.indexed || 0),
     failed: Number(summary.failed || 0),
     totalChunks: Number(summary.total_chunks || status?.total_chunks || 0),
     folders: Number(status?.drive_folder_count || 0),
+    files: Number(status?.drive_file_count || 0),
   };
+  const connectedSources = metrics.folders + metrics.files;
 
   const healthPercent =
     metrics.total > 0
@@ -346,9 +393,11 @@ export default function KnowledgeBasePage() {
   };
 
   return (
-    <AppShell currentPage="knowledge-base">
+    <AppShell currentPage={config.currentPage}>
       <main className="botiq-page-main botiq-kb-page">
+        <KnowledgeSourceTabs />
         <PageHeading
+          config={config}
           syncing={syncing}
           onRefresh={() => loadAll()}
           onIncremental={() => setConfirmSync("incremental")}
@@ -364,7 +413,11 @@ export default function KnowledgeBasePage() {
         )}
 
         {!loading && !status?.drive_configured && (
-          <DriveWarning folderIds={status?.drive_folder_ids || []} />
+          <DriveWarning
+            config={config}
+            folderIds={driveFolderIds}
+            fileIds={driveFileIds}
+          />
         )}
 
         <section className="botiq-kb-kpis" aria-label="Estado de la base de conocimiento">
@@ -384,8 +437,8 @@ export default function KnowledgeBasePage() {
           />
           <MetricCard
             icon={FolderSync}
-            label="Carpetas conectadas"
-            value={metrics.folders}
+            label={config.metricLabel}
+            value={source === "servers" ? connectedSources : metrics.folders}
             caption={status?.drive_configured ? "Google Drive activo" : "Sin conexión"}
             tone={status?.drive_configured ? "success" : "warning"}
           />
@@ -448,7 +501,7 @@ export default function KnowledgeBasePage() {
               </div>
               <div>
                 <span>Fuente de conocimiento</span>
-                <h2>Google Drive corporativo</h2>
+                <h2>{config.sourceTitle}</h2>
               </div>
             </header>
 
@@ -463,12 +516,18 @@ export default function KnowledgeBasePage() {
                 <span>Carpetas raíz</span>
                 <strong>{metrics.folders}</strong>
               </div>
+              {source === "servers" && (
+                <div className="botiq-kb-source-row">
+                  <span>Archivos directos</span>
+                  <strong>{metrics.files}</strong>
+                </div>
+              )}
               <div className="botiq-kb-source-row">
                 <span>Modo recomendado</span>
                 <strong>Sincronización incremental</strong>
               </div>
 
-              {status?.drive_folder_ids?.length > 0 && (
+              {(driveFolderIds.length > 0 || driveFileIds.length > 0) && (
                 <details className="botiq-kb-folders">
                   <summary>
                     <HardDrive size={15} />
@@ -476,8 +535,11 @@ export default function KnowledgeBasePage() {
                     <ChevronDown size={15} />
                   </summary>
                   <ul>
-                    {status.drive_folder_ids.map((folderId) => (
-                      <li key={folderId}>{folderId}</li>
+                    {driveFolderIds.map((folderId) => (
+                      <li key={`folder-${folderId}`}>Carpeta: {folderId}</li>
+                    ))}
+                    {driveFileIds.map((fileId) => (
+                      <li key={`file-${fileId}`}>Archivo: {fileId}</li>
                     ))}
                   </ul>
                 </details>
@@ -606,7 +668,22 @@ export default function KnowledgeBasePage() {
   );
 }
 
-function PageHeading({ syncing, onRefresh, onIncremental, onFull }) {
+function KnowledgeSourceTabs() {
+  return (
+    <nav className="botiq-kb-switcher" aria-label="Bases de conocimiento">
+      <NavLink end to="/dashboard/knowledge-base">
+        <BookOpenCheck size={17} />
+        Soporte
+      </NavLink>
+      <NavLink to="/dashboard/knowledge-base/servers">
+        <ServerCog size={17} />
+        Servidores
+      </NavLink>
+    </nav>
+  );
+}
+
+function PageHeading({ config, syncing, onRefresh, onIncremental, onFull }) {
   return (
     <header className="botiq-kb-heading">
       <div className="botiq-kb-heading__main">
@@ -615,12 +692,9 @@ function PageHeading({ syncing, onRefresh, onIncremental, onFull }) {
         </div>
 
         <div>
-          <span className="botiq-kb-heading__eyebrow">RAG corporativo</span>
-          <h1>Base de conocimiento</h1>
-          <p>
-            Supervisa documentos, sincronización con Google Drive y estado de
-            indexación del conocimiento utilizado por BOTIQ.
-          </p>
+          <span className="botiq-kb-heading__eyebrow">{config.eyebrow}</span>
+          <h1>{config.title}</h1>
+          <p>{config.description}</p>
         </div>
       </div>
 
@@ -697,7 +771,7 @@ function Alert({ type, text, onClose }) {
   );
 }
 
-function DriveWarning({ folderIds }) {
+function DriveWarning({ config, folderIds, fileIds }) {
   return (
     <section className="botiq-kb-drive-warning">
       <div className="botiq-kb-drive-warning__icon">
@@ -706,11 +780,13 @@ function DriveWarning({ folderIds }) {
       <div>
         <h2>Google Drive no está configurado</h2>
         <p>
-          Configura las carpetas raíz y comparte su acceso con la cuenta de
-          servicio para habilitar sincronización e indexación.
+          Configura la fuente de Google Drive para {config.emptyDescription} y
+          comparte el archivo o carpeta con la cuenta de servicio.
         </p>
-        {folderIds.length > 0 && (
-          <small>Configuración detectada: {folderIds.join(", ")}</small>
+        {(folderIds.length > 0 || fileIds.length > 0) && (
+          <small>
+            Configuración detectada: {[...folderIds, ...fileIds].join(", ")}
+          </small>
         )}
       </div>
     </section>
@@ -1024,6 +1100,15 @@ function formatDateTime(value) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+function normalizeDriveIds(values) {
+  if (!Array.isArray(values)) return [];
+
+  return values.filter((value) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    return normalized && normalized !== "no configurado";
+  });
 }
 
 function shortId(value = "") {

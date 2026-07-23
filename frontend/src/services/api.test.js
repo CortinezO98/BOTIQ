@@ -2,38 +2,46 @@ import { afterEach, describe, expect, it } from "vitest";
 import api from "./api";
 
 function getAuthHeader(config) {
-    const headers = config.headers;
-    if (headers && typeof headers.get === "function") {
-        return headers.get("Authorization");
-    }
-    return headers?.Authorization;
+  const headers = config.headers;
+  if (headers && typeof headers.get === "function") {
+    return headers.get("Authorization");
+  }
+  return headers?.Authorization;
 }
 
 function fakeAdapter(onConfig) {
-    return (config) => {
-        onConfig(config);
-        return Promise.resolve({ data: {}, status: 200, statusText: "OK", headers: {}, config });
-    };
+  return (config) => {
+    onConfig(config);
+    return Promise.resolve({ data: {}, status: 200, statusText: "OK", headers: {}, config });
+  };
 }
 
-describe("api.js — interceptor de Authorization para el widget embebible", () => {
-    afterEach(() => {
-        localStorage.removeItem("botiq_token");
+describe("api.js — autenticación por cookie y widget", () => {
+  afterEach(() => {
+    localStorage.removeItem("botiq_token");
+    localStorage.removeItem("botiq_user");
+    delete window.__BOTIQ_EMBED_AUTH_TOKEN__;
+  });
+
+  it("ignora tokens heredados de localStorage en la aplicación principal", async () => {
+    localStorage.setItem("botiq_token", "jwt-antiguo");
+    let capturedConfig;
+
+    await api.get("/health", {
+      adapter: fakeAdapter((config) => { capturedConfig = config; }),
     });
 
-    it("NO agrega header Authorization cuando no hay token de widget (caso normal: app principal, cookies)", async () => {
-        let capturedConfig;
-        await api.get("/health", { adapter: fakeAdapter((config) => { capturedConfig = config; }) });
+    expect(getAuthHeader(capturedConfig)).toBeUndefined();
+  });
 
-        expect(getAuthHeader(capturedConfig)).toBeUndefined();
+  it("agrega Authorization solo cuando el widget tiene un token en memoria", async () => {
+    window.__BOTIQ_EMBED_AUTH_TOKEN__ = "jwt-widget";
+    let capturedConfig;
+
+    await api.get("/health", {
+      adapter: fakeAdapter((config) => { capturedConfig = config; }),
     });
 
-    it("agrega el header Authorization cuando embed/widget-entry.jsx guardó un token en localStorage", async () => {
-        localStorage.setItem("botiq_token", "un-jwt-de-prueba");
-
-        let capturedConfig;
-        await api.get("/health", { adapter: fakeAdapter((config) => { capturedConfig = config; }) });
-
-        expect(getAuthHeader(capturedConfig)).toBe("Bearer un-jwt-de-prueba");
-    });
+    expect(getAuthHeader(capturedConfig)).toBe("Bearer jwt-widget");
+  });
 });

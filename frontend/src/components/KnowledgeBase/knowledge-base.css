@@ -1217,3 +1217,53 @@
     transition: none !important;
   }
 }
+
+
+/* Selector entre los dos RAG independientes */
+.botiq-kb-switcher {
+  display: inline-flex;
+  gap: 6px;
+  padding: 6px;
+  margin-bottom: 16px;
+  border: 1px solid var(--botiq-border);
+  border-radius: 16px;
+  background: var(--botiq-card-bg);
+  box-shadow: var(--botiq-shadow);
+}
+
+.botiq-kb-switcher a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  color: var(--botiq-muted);
+  font-weight: 700;
+  text-decoration: none;
+  transition: 160ms ease;
+}
+
+.botiq-kb-switcher a:hover {
+  color: var(--botiq-text);
+  background: var(--botiq-surface);
+}
+
+.botiq-kb-switcher a.active {
+  color: #fff;
+  background: linear-gradient(135deg, #272163, #5147a7);
+  box-shadow: 0 8px 18px rgba(39, 33, 99, 0.22);
+}
+
+@media (max-width: 640px) {
+  .botiq-kb-switcher {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .botiq-kb-switcher a {
+    justify-content: center;
+    padding-inline: 10px;
+  }
+}
