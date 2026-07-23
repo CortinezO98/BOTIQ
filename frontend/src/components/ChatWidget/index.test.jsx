@@ -1,23 +1,28 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const startSession = vi.fn();
-const clearChat = vi.fn();
-const sendMessage = vi.fn();
-const submitFeedback = vi.fn();
-const submitSatisfaction = vi.fn();
+const mocks = vi.hoisted(() => ({
+  messages: [],
+  startSession: vi.fn(),
+  clearChat: vi.fn(),
+  sendMessage: vi.fn(),
+  submitFeedback: vi.fn(),
+  submitSatisfaction: vi.fn(),
+}));
 
 vi.mock("../../hooks/useChat", () => ({
   useChat: () => ({
-    messages: [],
+    messages: mocks.messages,
     loading: false,
-    session: null,
-    sessionStatus: "idle",
-    startSession,
-    sendMessage,
-    clearChat,
-    submitFeedback,
-    submitSatisfaction,
+    session: mocks.messages.length
+      ? { selected_profile: "support_engineer" }
+      : null,
+    sessionStatus: mocks.messages.length ? "active" : "idle",
+    startSession: mocks.startSession,
+    sendMessage: mocks.sendMessage,
+    clearChat: mocks.clearChat,
+    submitFeedback: mocks.submitFeedback,
+    submitSatisfaction: mocks.submitSatisfaction,
   }),
 }));
 
@@ -38,6 +43,7 @@ import ChatWidget from "./index";
 
 afterEach(() => {
   cleanup();
+  mocks.messages = [];
   vi.clearAllMocks();
 });
 
@@ -59,7 +65,7 @@ describe("ChatWidget mejorado", () => {
   });
 
   it("inicia una sesión de empleado", async () => {
-    startSession.mockResolvedValueOnce({});
+    mocks.startSession.mockResolvedValueOnce({});
 
     render(<ChatWidget embedded />);
 
@@ -68,7 +74,7 @@ describe("ChatWidget mejorado", () => {
     );
 
     await waitFor(() => {
-      expect(startSession).toHaveBeenCalledWith({
+      expect(mocks.startSession).toHaveBeenCalledWith({
         selected_profile: "employee",
         network_username: undefined,
       });
@@ -110,5 +116,26 @@ describe("ChatWidget mejorado", () => {
     );
 
     expect(screen.getByText("Antes de iniciar")).toBeInTheDocument();
+  });
+
+  it("identifica una respuesta proveniente de la KB de servidores", () => {
+    mocks.messages = [
+      {
+        id: "server-answer-1",
+        role: "assistant",
+        content: "LETO se encuentra en estado crítico.",
+        meta: {
+          module: "server_validation",
+          answerSource: "servers_rag",
+          sources: ["Inventario de servidores"],
+        },
+        ts: new Date(),
+      },
+    ];
+
+    render(<ChatWidget embedded />);
+
+    expect(screen.getByText("KB Servidores")).toBeInTheDocument();
+    expect(screen.getByText(/Inventario de servidores/i)).toBeInTheDocument();
   });
 });

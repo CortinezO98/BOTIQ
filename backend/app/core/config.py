@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.17.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
+    APP_TIMEZONE: str = "America/Bogota"
 
     DATABASE_URL: str = "postgresql://botiq_user:botiq_pass@db:5432/botiq_db"
 
@@ -143,6 +144,18 @@ class Settings(BaseSettings):
     # cuál leer. Se obtiene del parámetro ?gid=NUMERO en la URL del Sheet.
     # Vacío = usa el comportamiento viejo (export CSV de la primera pestaña).
     GDRIVE_SERVERS_SHEET_GID: str = ""
+
+    # Sincronización automática e indicadores de salud para la KB de
+    # servidores. El scheduler ejecuta sync incremental, no reindexación
+    # completa: si el hash del Sheet no cambió, no genera embeddings nuevos.
+    SERVERS_KB_SYNC_INTERVAL_MINUTES: int = 10
+    SERVERS_KB_SYNC_ON_STARTUP: bool = True
+    SERVERS_KB_STARTUP_DELAY_SECONDS: int = 5
+    SERVERS_KB_SNAPSHOT_CACHE_SECONDS: int = 60
+    SERVERS_KB_STALE_AFTER_MINUTES: int = 45
+    SERVERS_KB_CPU_ALERT_PCT: float = 80.0
+    SERVERS_KB_RAM_ALERT_PCT: float = 85.0
+    SERVERS_KB_DISK_ALERT_PCT: float = 90.0
 
     # API externa de estados / disponibilidad de aplicativos.
     # Esta API es insumo interno del bot, no se expone directamente al usuario.

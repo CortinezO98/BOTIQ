@@ -14,6 +14,17 @@ const MODULE_INFO = {
   server_validation: { label: "Servidores", icon: "🖥️", color: "#0284c7" },
 };
 
+const ANSWER_SOURCE_INFO = {
+  faq: { label: "FAQ oficial", icon: "💬", color: "#059669" },
+  rag: { label: "KB Soporte", icon: "📚", color: "#7c3aed" },
+  servers_rag: { label: "KB Servidores", icon: "🖥️", color: "#0284c7" },
+  matrix: { label: "Matriz interna", icon: "🧩", color: "#2563eb" },
+  web_approved: { label: "Web aprobado", icon: "✅", color: "#0f766e" },
+  web_pending: { label: "Web por aprobar", icon: "🌐", color: "#d97706" },
+  general_ai: { label: "IA general", icon: "✨", color: "#9333ea" },
+  aranda_tracking: { label: "Aranda", icon: "🎫", color: "#059669" },
+};
+
 const QUICK_EMPLOYEE = [];
 const QUICK_SUPPORT = [];
 
@@ -631,6 +642,7 @@ function Composer({
 function Bubble({ msg, primaryColor, onFeedback }) {
   const isUser = msg.role === "user";
   const mod = MODULE_INFO[msg.meta?.module];
+  const answerSource = ANSWER_SOURCE_INFO[msg.meta?.answerSource];
   const rated = msg.meta?.userRating;
 
   return (
@@ -675,6 +687,13 @@ function Bubble({ msg, primaryColor, onFeedback }) {
           {mod && !isUser && (
             <Meta color={mod.color}>
               {mod.icon} {mod.label}
+            </Meta>
+          )}
+
+          {answerSource && !isUser && (
+            <Meta color={answerSource.color}>
+              <span aria-hidden="true">{answerSource.icon}</span>{" "}
+              <span>{answerSource.label}</span>
             </Meta>
           )}
 

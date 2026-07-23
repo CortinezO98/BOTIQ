@@ -324,9 +324,7 @@ export default function KnowledgeBasePage({ source = "support" }) {
   const healthPercent =
     metrics.total > 0
       ? Math.round((metrics.indexed / metrics.total) * 100)
-      : status?.status === "active"
-        ? 100
-        : 0;
+      : 0;
 
   const filteredDocuments = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -446,8 +444,12 @@ export default function KnowledgeBasePage({ source = "support" }) {
             icon={ShieldCheck}
             label="Salud de indexación"
             value={`${healthPercent}%`}
-            caption={`${metrics.failed} documentos con error`}
-            tone={metrics.failed > 0 ? "warning" : "info"}
+            caption={
+              metrics.total === 0
+                ? "Pendiente de primera indexación"
+                : `${metrics.failed} documentos con error`
+            }
+            tone={metrics.total === 0 || metrics.failed > 0 ? "warning" : "info"}
           />
         </section>
 
@@ -457,9 +459,11 @@ export default function KnowledgeBasePage({ source = "support" }) {
               <div>
                 <span>Estado del motor RAG</span>
                 <h2>
-                  {status?.status === "active"
-                    ? "Base de conocimiento operativa"
-                    : "Base de conocimiento con novedades"}
+                  {metrics.total === 0
+                    ? "Pendiente de primera indexación"
+                    : status?.status === "active"
+                      ? "Base de conocimiento operativa"
+                      : "Base de conocimiento con novedades"}
                 </h2>
               </div>
               <EngineBadge status={status?.status} />
@@ -469,7 +473,7 @@ export default function KnowledgeBasePage({ source = "support" }) {
               <div className="botiq-kb-ring" style={{ "--progress": `${healthPercent * 3.6}deg` }}>
                 <div>
                   <strong>{healthPercent}%</strong>
-                  <span>indexado</span>
+                  <span>{metrics.total === 0 ? "pendiente" : "indexado"}</span>
                 </div>
               </div>
 
@@ -526,6 +530,26 @@ export default function KnowledgeBasePage({ source = "support" }) {
                 <span>Modo recomendado</span>
                 <strong>Sincronización incremental</strong>
               </div>
+              {source === "servers" && (
+                <>
+                  <div className="botiq-kb-source-row">
+                    <span>Actualización automática</span>
+                    <strong>
+                      {status?.auto_sync_interval_minutes
+                        ? `Cada ${status.auto_sync_interval_minutes} min`
+                        : "Pendiente de configuración"}
+                    </strong>
+                  </div>
+                  <div className="botiq-kb-source-row">
+                    <span>Última sincronización</span>
+                    <strong>
+                      {status?.last_sync_finished_at
+                        ? formatDate(status.last_sync_finished_at)
+                        : "Aún no ejecutada"}
+                    </strong>
+                  </div>
+                </>
+              )}
 
               {(driveFolderIds.length > 0 || driveFileIds.length > 0) && (
                 <details className="botiq-kb-folders">

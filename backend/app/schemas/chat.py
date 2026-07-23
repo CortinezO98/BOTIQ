@@ -40,8 +40,9 @@ class ChatMessageResponse(BaseModel):
     question_count: int = 0
     max_questions: int = 0
     # Fuente de la respuesta para mostrar en el frontend (chip de gobierno de
-    # IA): "faq" | "rag" | "matrix" | "web_approved" | "web_pending" |
-    # "general_ai" | None (respuestas guiadas/directas sin fuente, saludos,
+    # IA): "faq" | "rag" | "servers_rag" | "matrix" | "web_approved" |
+    # "web_pending" | "general_ai" | "aranda_tracking" | None (respuestas
+    # guiadas/directas sin fuente, saludos,
     # confirmaciones de ticket, etc.). Calculado en chat.py a partir de los
     # flags que ya existían en bot_result, antes solo persistidos en DB.
     answer_source: Optional[str] = None

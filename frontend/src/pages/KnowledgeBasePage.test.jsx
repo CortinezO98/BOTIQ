@@ -74,6 +74,8 @@ vi.mock("../services/api", () => ({
         drive_file_count: 1,
         drive_file_ids: ["server-sheet-1"],
         sheet_gid: "123456",
+        auto_sync_interval_minutes: 10,
+        last_sync_finished_at: "2026-07-23T10:40:00Z",
       },
     }),
     documents: vi.fn().mockResolvedValue({
@@ -197,6 +199,8 @@ describe("KnowledgeBasePage profesional", () => {
     expect(screen.getByText("Base de conocimiento de servidores")).toBeInTheDocument();
     expect(screen.getByText("Fuentes conectadas")).toBeInTheDocument();
     expect(screen.getByText("Archivos directos")).toBeInTheDocument();
+    expect(screen.getByText("Actualización automática")).toBeInTheDocument();
+    expect(screen.getByText("Cada 10 min")).toBeInTheDocument();
   });
 
   it("recarga la fuente correcta al cambiar de soporte a servidores", async () => {
