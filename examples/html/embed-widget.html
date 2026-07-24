@@ -1,0 +1,25 @@
+<!--
+  El usuario debe estar autenticado en este portal.
+  /api/botiq-widget-token.php es un endpoint DEL PORTAL, no de BOTIQ.
+-->
+<script
+  src="https://botiq.tu-dominio.com/widget/v1/botiq-loader.js"
+  defer
+></script>
+
+<script>
+  window.addEventListener("DOMContentLoaded", () => {
+    window.BotiqPortalWidget.init({
+      widgetBaseUrl: "https://botiq.tu-dominio.com",
+      portalId: "portal-icetex",
+
+      // El navegador llama al backend del mismo portal. Ese backend usa
+      // BOTIQ_PORTAL_SECRET de forma server-to-server.
+      tokenEndpoint: "/api/botiq-widget-token.php",
+
+      position: "bottom-right",
+      primaryColor: "#272163",
+      title: "BOTIQ — Soporte corporativo",
+    });
+  });
+</script>

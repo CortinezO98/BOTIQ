@@ -1,59 +1,224 @@
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || window.__BOTIQ_API_URL__ || "http://localhost:8002/api/v1";
+function normalizeApiUrl(value) {
+  const raw = String(value || "").trim().replace(/\/+$/, "");
+  if (!raw) return "http://localhost:8002/api/v1";
+  return /\/api\/v1$/i.test(raw) ? raw : `${raw}/api/v1`;
+}
 
-// /health vive en la raíz del backend (fuera de /api/v1, ver main.py). Antes
-// ChatWidget hacía fetch("/health") con una URL relativa, que apunta al
-// origen del FRONTEND (localhost:5180 en dev, nginx sirviendo el SPA en
-// prod) — nunca llegaba al backend real, así que el chequeo de "modo
-// degradado" nunca funcionó de verdad, ni en dev ni en producción.
-const BACKEND_ROOT = API_URL.replace(/\/api\/v1\/?$/, "");
+function backendRootFromApi(apiUrl) {
+  return normalizeApiUrl(apiUrl).replace(/\/api\/v1\/?$/i, "");
+}
 
-export const healthAPI = {
-  check: () => axios.get(`${BACKEND_ROOT}/health`, { timeout: 5000 }),
+function decodeJwtPayload(token) {
+  try {
+    const part = String(token || "").split(".")[1];
+    if (!part) return null;
+    const normalized = part.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(
+      normalized.length + ((4 - (normalized.length % 4)) % 4),
+      "=",
+    );
+    return JSON.parse(window.atob(padded));
+  } catch {
+    return null;
+  }
+}
+
+function tokenExpiresSoon(token, leewaySeconds = 30) {
+  const payload = decodeJwtPayload(token);
+  if (!payload?.exp) return false;
+  return payload.exp <= Math.floor(Date.now() / 1000) + leewaySeconds;
+}
+
+const DEFAULT_API_URL = normalizeApiUrl(
+  import.meta.env.VITE_API_URL
+    || window.__BOTIQ_API_URL__
+    || "http://localhost:8002/api/v1",
+);
+
+const runtime = {
+  mode: "cookie",
+  apiUrl: DEFAULT_API_URL,
+  authToken: null,
+  tokenProvider: null,
+  portalId: null,
+  parentOrigin: null,
 };
 
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: DEFAULT_API_URL,
   timeout: 30000,
-  // La sesión vive en cookies httpOnly (botiq_access_token / botiq_refresh_token).
-  // Sin esto, el navegador no manda ni recibe esas cookies en llamadas cross-origin
-  // (localhost:5180 -> localhost:8002 son orígenes distintos aunque mismo "site").
   withCredentials: true,
 });
 
 let refreshPromise = null;
+let widgetTokenPromise = null;
 
-function isAuthEndpoint(url = "") {
-  return url.includes("/auth/login") || url.includes("/auth/refresh") || url.includes("/auth/register");
+function extractToken(value) {
+  if (typeof value === "string") return value;
+  return value?.access_token || value?.token || null;
 }
 
-// La aplicación principal se autentica exclusivamente con cookies httpOnly.
-// El widget embebible usa un token en memoria, no localStorage. Esto evita
-// que un JWT antiguo de versiones previas tenga prioridad sobre la cookie
-// válida y provoque 401 después de iniciar sesión.
-api.interceptors.request.use((config) => {
-  const embedToken = window.__BOTIQ_EMBED_AUTH_TOKEN__;
-  if (embedToken) {
-    config.headers = config.headers || {};
-    config.headers.Authorization = `Bearer ${embedToken}`;
+async function ensureWidgetToken(force = false) {
+  if (runtime.mode !== "widget") return null;
+
+  if (
+    !force
+    && runtime.authToken
+    && !tokenExpiresSoon(runtime.authToken)
+  ) {
+    return runtime.authToken;
   }
+
+  if (typeof runtime.tokenProvider !== "function") {
+    return runtime.authToken;
+  }
+
+  if (!widgetTokenPromise) {
+    widgetTokenPromise = Promise.resolve(runtime.tokenProvider())
+      .then((value) => {
+        const token = extractToken(value);
+        if (!token) {
+          throw new Error(
+            "El portal no entregó un token temporal válido para BOTIQ.",
+          );
+        }
+        runtime.authToken = token;
+        return token;
+      })
+      .finally(() => {
+        widgetTokenPromise = null;
+      });
+  }
+
+  return widgetTokenPromise;
+}
+
+export function configureEmbeddedApi({
+  apiUrl,
+  authToken = null,
+  tokenProvider = null,
+  portalId,
+  parentOrigin,
+} = {}) {
+  const normalizedApiUrl = normalizeApiUrl(apiUrl || DEFAULT_API_URL);
+
+  runtime.mode = "widget";
+  runtime.apiUrl = normalizedApiUrl;
+  runtime.authToken = authToken || null;
+  runtime.tokenProvider = tokenProvider || null;
+  runtime.portalId = String(portalId || "").trim() || null;
+  runtime.parentOrigin = String(parentOrigin || "").trim() || null;
+
+  api.defaults.baseURL = normalizedApiUrl;
+  api.defaults.withCredentials = false;
+
+  // Compatibilidad temporal para integraciones antiguas que consultaban
+  // esta variable. El interceptor ya no depende de ella.
+  window.__BOTIQ_API_URL__ = normalizedApiUrl;
+
+  return {
+    apiUrl: runtime.apiUrl,
+    mode: runtime.mode,
+    portalId: runtime.portalId,
+    parentOrigin: runtime.parentOrigin,
+  };
+}
+
+export function setEmbeddedAuthToken(token) {
+  runtime.authToken = token || null;
+}
+
+export function clearEmbeddedApi() {
+  runtime.mode = "cookie";
+  runtime.apiUrl = DEFAULT_API_URL;
+  runtime.authToken = null;
+  runtime.tokenProvider = null;
+  runtime.portalId = null;
+  runtime.parentOrigin = null;
+  widgetTokenPromise = null;
+
+  api.defaults.baseURL = DEFAULT_API_URL;
+  api.defaults.withCredentials = true;
+
+  delete window.__BOTIQ_API_URL__;
+  delete window.__BOTIQ_EMBED_AUTH_TOKEN__;
+}
+
+export function getApiRuntimeConfig() {
+  return {
+    mode: runtime.mode,
+    apiUrl: runtime.apiUrl,
+    portalId: runtime.portalId,
+    parentOrigin: runtime.parentOrigin,
+    hasAuthToken: Boolean(runtime.authToken),
+    hasTokenProvider: typeof runtime.tokenProvider === "function",
+  };
+}
+
+export const healthAPI = {
+  check: () =>
+    axios.get(`${backendRootFromApi(runtime.apiUrl)}/health`, {
+      timeout: 5000,
+      withCredentials: runtime.mode !== "widget",
+    }),
+};
+
+function isAuthEndpoint(url = "") {
+  return (
+    url.includes("/auth/login")
+    || url.includes("/auth/refresh")
+    || url.includes("/auth/register")
+  );
+}
+
+api.interceptors.request.use(async (config) => {
+  if (runtime.mode !== "widget") return config;
+
+  const token = await ensureWidgetToken(false);
+  if (!token) {
+    throw new Error(
+      "No existe un token temporal para inicializar el widget BOTIQ.",
+    );
+  }
+
+  config.headers = config.headers || {};
+  config.headers.Authorization = `Bearer ${token}`;
+  config.headers["X-BOTIQ-Portal-Id"] = runtime.portalId;
+  config.headers["X-BOTIQ-Parent-Origin"] = runtime.parentOrigin;
+  config.withCredentials = false;
   return config;
 });
 
-// Si una petición falla con 401 (access token vencido), intenta renovar la
-// sesión UNA vez vía /auth/refresh y reintenta la petición original. Si el
-// refresh también falla, la sesión realmente expiró y el error sigue su curso
-// normal (useAuth.syncUser lo interpreta como "sin sesión").
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config;
+
     if (
-      error.response?.status === 401 &&
-      original &&
-      !original._retried &&
-      !isAuthEndpoint(original.url || "")
+      runtime.mode === "widget"
+      && error.response?.status === 401
+      && original
+      && !original._widgetRetried
+    ) {
+      original._widgetRetried = true;
+      runtime.authToken = null;
+
+      try {
+        await ensureWidgetToken(true);
+        return api(original);
+      } catch {
+        return Promise.reject(error);
+      }
+    }
+
+    if (
+      runtime.mode !== "widget"
+      && error.response?.status === 401
+      && original
+      && !original._retried
+      && !isAuthEndpoint(original.url || "")
     ) {
       original._retried = true;
       try {
@@ -65,11 +230,12 @@ api.interceptors.response.use(
         await refreshPromise;
         return api(original);
       } catch {
-        // El refresh también falló: dejamos que el 401 original se propague.
+        // La cookie de refresh también expiró; se propaga el 401 original.
       }
     }
+
     return Promise.reject(error);
-  }
+  },
 );
 
 export const authAPI = {

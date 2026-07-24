@@ -1,5 +1,7 @@
 from functools import lru_cache
-from typing import List
+from typing import Any, Dict, List
+import json
+from urllib.parse import urlsplit
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
@@ -7,6 +9,39 @@ from pydantic_settings import BaseSettings
 # Valor por defecto de desarrollo. Se usa también para detectar si alguien
 # olvidó sobreescribir SECRET_KEY en un .env de producción real.
 _DEV_SECRET_KEY = "dev-secret-change-in-production-32chars!!"
+
+
+def _normalize_widget_origin(value: str) -> str:
+    """Normaliza origins configurados y falla al iniciar si son inválidos."""
+    raw = str(value or "").strip()
+    parsed = urlsplit(raw)
+    scheme = parsed.scheme.lower()
+    hostname = (parsed.hostname or "").lower()
+
+    if scheme not in {"http", "https"} or not hostname:
+        raise ValueError(
+            f"Origin inválido en WIDGET_PORTALS_JSON: {raw!r}."
+        )
+    if parsed.username or parsed.password:
+        raise ValueError(
+            f"El origin {raw!r} no puede contener credenciales."
+        )
+    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        raise ValueError(
+            f"El origin {raw!r} no puede contener ruta, query o fragmento."
+        )
+
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError(f"Puerto inválido en el origin {raw!r}.") from exc
+
+    if port and not (
+        (scheme == "http" and port == 80)
+        or (scheme == "https" and port == 443)
+    ):
+        return f"{scheme}://{hostname}:{port}"
+    return f"{scheme}://{hostname}"
 
 
 class Settings(BaseSettings):
@@ -227,6 +262,34 @@ class Settings(BaseSettings):
 
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:5180,http://localhost:5190,http://localhost:3000"
 
+
+    # ── Widget embebible seguro para portales externos ─────────────────────
+    # El widget recomendado se carga dentro de un iframe alojado por BOTIQ.
+    # Cada portal obtiene un JWT efímero mediante un intercambio backend a
+    # backend; la clave del portal NUNCA se entrega al navegador.
+    WIDGET_ENABLED: bool = False
+    WIDGET_PUBLIC_URL: str = "http://localhost:5180"
+    WIDGET_TOKEN_EXPIRE_MINUTES: int = 10
+    WIDGET_TOKEN_ISSUER: str = "botiq"
+    WIDGET_TOKEN_AUDIENCE: str = "botiq-widget"
+    WIDGET_TOKEN_RATE_LIMIT: str = "30/minute"
+    WIDGET_AUTO_PROVISION_USERS: bool = True
+
+    # JSON de portales autorizados. Formato:
+    # [
+    #   {
+    #     "id": "portal-icetex",
+    #     "secret": "secreto-aleatorio-minimo-32-caracteres",
+    #     "origins": ["https://portal.example.com"],
+    #     "email_domains": ["iq-online.com"],
+    #     "auto_provision": true
+    #   }
+    # ]
+    #
+    # También acepta un objeto por id:
+    # {"portal-icetex": {"secret": "...", "origins": [...]}}
+    WIDGET_PORTALS_JSON: str = "[]"
+
     # ── Rate limiting ──────────────────────────────────────────────────────────
     # Límites por IP. Formato: "N/period" (slowapi/limits).
     # En producción se recomienda bajar LOGIN_RATE_LIMIT a "5/minute".
@@ -234,6 +297,98 @@ class Settings(BaseSettings):
     LOGIN_RATE_LIMIT: str = "10/minute"      # /auth/login y /auth/register
     CHAT_RATE_LIMIT: str = "30/minute"       # /chat/message
     API_RATE_LIMIT: str = "120/minute"       # resto de endpoints autenticados
+
+
+    def get_widget_portals(self) -> List[Dict[str, Any]]:
+        """Devuelve la configuración normalizada de portales embebibles."""
+        raw = (self.WIDGET_PORTALS_JSON or "[]").strip()
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                "WIDGET_PORTALS_JSON no contiene JSON válido."
+            ) from exc
+
+        if isinstance(parsed, dict):
+            items = []
+            for portal_id, value in parsed.items():
+                if not isinstance(value, dict):
+                    raise ValueError(
+                        "Cada portal de WIDGET_PORTALS_JSON debe ser un objeto."
+                    )
+                items.append({"id": portal_id, **value})
+        elif isinstance(parsed, list):
+            items = parsed
+        else:
+            raise ValueError(
+                "WIDGET_PORTALS_JSON debe ser una lista o un objeto."
+            )
+
+        normalized: List[Dict[str, Any]] = []
+        seen_ids = set()
+        for item in items:
+            if not isinstance(item, dict):
+                raise ValueError(
+                    "Cada portal de WIDGET_PORTALS_JSON debe ser un objeto."
+                )
+
+            portal_id = str(item.get("id") or "").strip()
+            secret = str(item.get("secret") or "").strip()
+            origins = [
+                _normalize_widget_origin(origin)
+                for origin in (item.get("origins") or [])
+                if str(origin).strip()
+            ]
+            domains = [
+                str(domain).strip().lower()
+                for domain in (item.get("email_domains") or [])
+                if str(domain).strip()
+            ]
+
+            if not portal_id:
+                raise ValueError("Cada portal debe tener un id.")
+            if not all(
+                char.isalnum() or char in {"-", "_", "."}
+                for char in portal_id
+            ) or len(portal_id) > 64:
+                raise ValueError(
+                    "El id del portal solo admite letras, números, punto, "
+                    "guion y guion bajo, con máximo 64 caracteres."
+                )
+            if portal_id in seen_ids:
+                raise ValueError(
+                    f"Portal duplicado en WIDGET_PORTALS_JSON: {portal_id}"
+                )
+            if not secret:
+                raise ValueError(
+                    f"El portal {portal_id} no tiene secret configurado."
+                )
+            if not origins:
+                raise ValueError(
+                    f"El portal {portal_id} debe declarar al menos un origin."
+                )
+            if any(origin == "*" for origin in origins):
+                raise ValueError(
+                    f"El portal {portal_id} no puede usar origin comodín '*'."
+                )
+
+            seen_ids.add(portal_id)
+            normalized.append(
+                {
+                    "id": portal_id,
+                    "secret": secret,
+                    "origins": origins,
+                    "email_domains": domains,
+                    "auto_provision": bool(
+                        item.get(
+                            "auto_provision",
+                            self.WIDGET_AUTO_PROVISION_USERS,
+                        )
+                    ),
+                }
+            )
+
+        return normalized
 
     def get_allowed_origins(self) -> List[str]:
         return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
@@ -316,6 +471,35 @@ class Settings(BaseSettings):
                 )
             if self.DEBUG:
                 problems.append("DEBUG=true en ENVIRONMENT=production. Debe ser false.")
+
+            if self.WIDGET_ENABLED:
+                if not self.WIDGET_PUBLIC_URL.lower().startswith("https://"):
+                    problems.append(
+                        "WIDGET_PUBLIC_URL debe usar HTTPS en producción."
+                    )
+                try:
+                    widget_portals = self.get_widget_portals()
+                except ValueError as exc:
+                    problems.append(str(exc))
+                    widget_portals = []
+
+                if not widget_portals:
+                    problems.append(
+                        "WIDGET_ENABLED=true pero WIDGET_PORTALS_JSON está vacío."
+                    )
+
+                for portal in widget_portals:
+                    if len(portal["secret"]) < 32:
+                        problems.append(
+                            f"El secret del portal {portal['id']} debe tener "
+                            "al menos 32 caracteres aleatorios."
+                        )
+                    for origin in portal["origins"]:
+                        if not origin.lower().startswith("https://"):
+                            problems.append(
+                                f"El origin {origin} del portal {portal['id']} "
+                                "debe usar HTTPS en producción."
+                            )
 
             if problems:
                 raise ValueError(

@@ -27,11 +27,14 @@ const ANSWER_SOURCE_INFO = {
 
 const QUICK_EMPLOYEE = [];
 const QUICK_SUPPORT = [];
+const ALL_PROFILES = ["employee", "support_engineer"];
 
 export default function ChatWidget({
   position = "bottom-right",
   primaryColor = C,
   embedded = false,
+  allowedProfiles = ALL_PROFILES,
+  onRequestClose = null,
 }) {
   const [open, setOpen] = useState(embedded);
   const [input, setInput] = useState("");
@@ -43,6 +46,12 @@ export default function ChatWidget({
   const [profileError, setProfileError] = useState("");
   const [showSatisfaction, setShowSatisfaction] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(true);
+
+  const allowedProfileSet = new Set(
+    Array.isArray(allowedProfiles) ? allowedProfiles : ALL_PROFILES,
+  );
+  const canSelectEmployee = allowedProfileSet.has("employee");
+  const canSelectSupport = allowedProfileSet.has("support_engineer");
 
   const {
     messages,
@@ -67,10 +76,12 @@ export default function ChatWidget({
   useEffect(() => {
     if (!open) return;
 
-    supportAPI
-      .status()
-      .then((response) => setKbStatus(response.data))
-      .catch(() => {});
+    if (canSelectSupport) {
+      supportAPI
+        .status()
+        .then((response) => setKbStatus(response.data))
+        .catch(() => {});
+    }
 
     healthAPI
       .check()
@@ -78,7 +89,7 @@ export default function ChatWidget({
         setAiAvailable(response.data?.ai_available !== false),
       )
       .catch(() => setAiAvailable(true));
-  }, [open]);
+  }, [open, canSelectSupport]);
 
   const resetLocalFlow = async () => {
     if (session && messages.length > 1) {
@@ -106,6 +117,11 @@ export default function ChatWidget({
   };
 
   const configureProfile = async (profile) => {
+    if (!allowedProfileSet.has(profile)) {
+      setProfileError("Este perfil no está habilitado en este portal.");
+      return;
+    }
+
     setProfileError("");
     setSelectedProfile(profile);
 
@@ -206,8 +222,11 @@ export default function ChatWidget({
       <Header
         primaryColor={primaryColor}
         onReset={resetLocalFlow}
-        onClose={() => setOpen(false)}
-        showClose={!embedded}
+        onClose={() => {
+          if (onRequestClose) onRequestClose();
+          else setOpen(false);
+        }}
+        showClose={!embedded || Boolean(onRequestClose)}
       />
 
       {kbStatus &&
@@ -238,6 +257,8 @@ export default function ChatWidget({
             error={profileError}
             primaryColor={primaryColor}
             networkInputRef={networkInputRef}
+            canSelectEmployee={canSelectEmployee}
+            canSelectSupport={canSelectSupport}
           />
         )}
 
@@ -431,6 +452,8 @@ function ProfileSelector({
   error,
   primaryColor,
   networkInputRef,
+  canSelectEmployee,
+  canSelectSupport,
 }) {
   return (
     <div className="botiq-profile-selector">
@@ -447,77 +470,86 @@ function ProfileSelector({
       </h2>
 
       <p className="botiq-profile-selector__description">
-        Selecciona tu perfil para configurar el flujo conversacional,
-        las fuentes de conocimiento y los controles de uso de IA.
+        {canSelectSupport
+          ? "Selecciona tu perfil para configurar el flujo conversacional, las fuentes de conocimiento y los controles de uso de IA."
+          : "Inicia una consulta corporativa con el perfil Empleado asignado a este portal."}
       </p>
 
       <div className="botiq-profile-options">
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => configureProfile("employee")}
-          className={`botiq-profile-card ${
-            selectedProfile === "employee" ? "is-active" : ""
-          }`}
-        >
-          <span className="botiq-profile-card__icon">👤</span>
-          <strong>Empleado</strong>
-          <small>FAQs, aplicativos y URLs</small>
-        </button>
+        {canSelectEmployee && (
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => configureProfile("employee")}
+            className={`botiq-profile-card ${
+              selectedProfile === "employee" ? "is-active" : ""
+            }`}
+          >
+            <span className="botiq-profile-card__icon">👤</span>
+            <strong>Empleado</strong>
+            <small>FAQs, aplicativos, URLs y estado básico</small>
+          </button>
+        )}
 
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => networkInputRef.current?.focus()}
-          className={`botiq-profile-card ${
-            selectedProfile === "support_engineer"
-              ? "is-active"
-              : ""
-          }`}
-        >
-          <span className="botiq-profile-card__icon">🛠️</span>
-          <strong>Ing. Soporte</strong>
-          <small>RAG, PDFs y servidores</small>
-        </button>
+        {canSelectSupport && (
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => networkInputRef.current?.focus()}
+            className={`botiq-profile-card ${
+              selectedProfile === "support_engineer"
+                ? "is-active"
+                : ""
+            }`}
+          >
+            <span className="botiq-profile-card__icon">🛠️</span>
+            <strong>Ing. Soporte</strong>
+            <small>RAG, PDFs y servidores</small>
+          </button>
+        )}
       </div>
 
-      <div className="botiq-support-access">
-        <label htmlFor="botiq-network-user">
-          Usuario de red para soporte
-        </label>
+      {canSelectSupport && (
+        <div className="botiq-support-access">
+          <label htmlFor="botiq-network-user">
+            Usuario de red para soporte
+          </label>
 
-        <div className="botiq-support-access__input-wrap">
-          <span aria-hidden="true">👤</span>
-          <input
-            id="botiq-network-user"
-            ref={networkInputRef}
-            value={networkUsername}
-            onChange={(event) =>
-              setNetworkUsername(event.target.value)
-            }
-            onFocus={() =>
-              setSelectedProfile("support_engineer")
-            }
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                configureSupport();
+          <div className="botiq-support-access__input-wrap">
+            <span aria-hidden="true">👤</span>
+            <input
+              id="botiq-network-user"
+              ref={networkInputRef}
+              value={networkUsername}
+              onChange={(event) =>
+                setNetworkUsername(event.target.value)
               }
-            }}
-            placeholder="Ej. jose.cortez"
-            autoComplete="username"
-          />
-        </div>
+              onFocus={() =>
+                setSelectedProfile("support_engineer")
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  configureSupport();
+                }
+              }}
+              placeholder="Ej. jose.cortez"
+              autoComplete="username"
+            />
+          </div>
 
-        <button
-          type="button"
-          disabled={loading}
-          onClick={configureSupport}
-          className="botiq-support-access__button"
-        >
-          {loading ? "Validando perfil..." : "Validar e iniciar como soporte"}
-        </button>
-      </div>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={configureSupport}
+            className="botiq-support-access__button"
+          >
+            {loading
+              ? "Validando perfil..."
+              : "Validar e iniciar como soporte"}
+          </button>
+        </div>
+      )}
 
       <div className="botiq-profile-selector__notice">
         <span>🔒</span>

@@ -138,4 +138,42 @@ describe("ChatWidget mejorado", () => {
     expect(screen.getByText("KB Servidores")).toBeInTheDocument();
     expect(screen.getByText(/Inventario de servidores/i)).toBeInTheDocument();
   });
+
+  it("oculta el perfil de soporte cuando el portal solo permite empleados", () => {
+    render(
+      <ChatWidget
+        embedded
+        allowedProfiles={["employee"]}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /empleado/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Ing. Soporte"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/usuario de red/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("notifica al portal cuando se solicita cerrar el iframe", () => {
+    const onRequestClose = vi.fn();
+
+    render(
+      <ChatWidget
+        embedded
+        allowedProfiles={["employee"]}
+        onRequestClose={onRequestClose}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /cerrar chat/i }),
+    );
+
+    expect(onRequestClose).toHaveBeenCalledTimes(1);
+  });
+
 });

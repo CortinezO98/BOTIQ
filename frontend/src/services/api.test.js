@@ -1,47 +1,126 @@
-import { afterEach, describe, expect, it } from "vitest";
-import api from "./api";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-function getAuthHeader(config) {
+import api, {
+  clearEmbeddedApi,
+  configureEmbeddedApi,
+  getApiRuntimeConfig,
+} from "./api";
+
+function getHeader(config, name) {
   const headers = config.headers;
   if (headers && typeof headers.get === "function") {
-    return headers.get("Authorization");
+    return headers.get(name);
   }
-  return headers?.Authorization;
+  return headers?.[name];
 }
 
 function fakeAdapter(onConfig) {
   return (config) => {
     onConfig(config);
-    return Promise.resolve({ data: {}, status: 200, statusText: "OK", headers: {}, config });
+    return Promise.resolve({
+      data: {},
+      status: 200,
+      statusText: "OK",
+      headers: {},
+      config,
+    });
   };
 }
 
-describe("api.js — autenticación por cookie y widget", () => {
+function fakeJwt(payload) {
+  const encode = (value) =>
+    window
+      .btoa(JSON.stringify(value))
+      .replace(/=/g, "")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_");
+
+  return `${encode({ alg: "none", typ: "JWT" })}.${encode(payload)}.firma`;
+}
+
+describe("api.js — cookie normal y widget efímero", () => {
   afterEach(() => {
+    clearEmbeddedApi();
     localStorage.removeItem("botiq_token");
     localStorage.removeItem("botiq_user");
-    delete window.__BOTIQ_EMBED_AUTH_TOKEN__;
+    vi.restoreAllMocks();
   });
 
-  it("ignora tokens heredados de localStorage en la aplicación principal", async () => {
+  it("ignora JWT heredados de localStorage en la aplicación principal", async () => {
     localStorage.setItem("botiq_token", "jwt-antiguo");
-    let capturedConfig;
+    let captured;
 
-    await api.get("/health", {
-      adapter: fakeAdapter((config) => { capturedConfig = config; }),
+    await api.get("/employees/faqs", {
+      adapter: fakeAdapter((config) => {
+        captured = config;
+      }),
     });
 
-    expect(getAuthHeader(capturedConfig)).toBeUndefined();
+    expect(getHeader(captured, "Authorization")).toBeUndefined();
+    expect(getApiRuntimeConfig().mode).toBe("cookie");
   });
 
-  it("agrega Authorization solo cuando el widget tiene un token en memoria", async () => {
-    window.__BOTIQ_EMBED_AUTH_TOKEN__ = "jwt-widget";
-    let capturedConfig;
-
-    await api.get("/health", {
-      adapter: fakeAdapter((config) => { capturedConfig = config; }),
+  it("configura apiUrl dinámico y contexto del portal", async () => {
+    const token = fakeJwt({
+      exp: Math.floor(Date.now() / 1000) + 600,
     });
 
-    expect(getAuthHeader(capturedConfig)).toBe("Bearer jwt-widget");
+    configureEmbeddedApi({
+      apiUrl: "https://botiq.example.com",
+      authToken: token,
+      portalId: "portal-icetex",
+      parentOrigin: "https://portal.icetex.gov.co",
+    });
+
+    let captured;
+    await api.get("/employees/faqs", {
+      adapter: fakeAdapter((config) => {
+        captured = config;
+      }),
+    });
+
+    expect(captured.baseURL).toBe(
+      "https://botiq.example.com/api/v1",
+    );
+    expect(getHeader(captured, "Authorization")).toBe(`Bearer ${token}`);
+    expect(getHeader(captured, "X-BOTIQ-Portal-Id")).toBe(
+      "portal-icetex",
+    );
+    expect(getHeader(captured, "X-BOTIQ-Parent-Origin")).toBe(
+      "https://portal.icetex.gov.co",
+    );
+    expect(captured.withCredentials).toBe(false);
+  });
+
+  it("solicita un token nuevo cuando el actual está por expirar", async () => {
+    const expired = fakeJwt({
+      exp: Math.floor(Date.now() / 1000) - 10,
+    });
+    const renewed = fakeJwt({
+      exp: Math.floor(Date.now() / 1000) + 600,
+    });
+    const tokenProvider = vi.fn().mockResolvedValue({
+      access_token: renewed,
+    });
+
+    configureEmbeddedApi({
+      apiUrl: "https://botiq.example.com/api/v1",
+      authToken: expired,
+      tokenProvider,
+      portalId: "portal-demo",
+      parentOrigin: "https://portal.example.com",
+    });
+
+    let captured;
+    await api.get("/chat/conversations", {
+      adapter: fakeAdapter((config) => {
+        captured = config;
+      }),
+    });
+
+    expect(tokenProvider).toHaveBeenCalledTimes(1);
+    expect(getHeader(captured, "Authorization")).toBe(
+      `Bearer ${renewed}`,
+    );
   });
 });

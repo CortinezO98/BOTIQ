@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.security import decode_token
 from app.core.roles import UserRole, has_minimum_role
+from app.core.widget_security import validate_widget_request_context
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
@@ -38,12 +39,36 @@ async def get_current_user(
 ) -> User:
     token = _resolve_token(request, header_token)
     data = decode_token(token)
+
+    if data.get("purpose") == "widget_access":
+        validate_widget_request_context(request, data)
+
     result = await db.execute(
-        select(User).where(User.id == data["user_id"], User.is_active == True)
+        select(User).where(
+            User.id == data["user_id"],
+            User.is_active == True,
+        )
     )
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario no encontrado",
+        )
+
+    # Defensa en profundidad: los tokens del widget se emiten únicamente para
+    # identidades employee. Aunque una cuenta cambie de rol después de emitir
+    # el token, ese JWT no debe convertirse en una sesión de soporte/admin.
+    if (
+        data.get("purpose") == "widget_access"
+        and user.role != UserRole.EMPLOYEE
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El widget externo solo admite el perfil Empleado.",
+        )
+
+    request.state.auth_claims = data
     return user
 
 
