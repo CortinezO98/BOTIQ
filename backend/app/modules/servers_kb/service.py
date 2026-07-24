@@ -1249,6 +1249,16 @@ class ServersKnowledgeService:
                     "matched_servers": [
                         record.get("hostname") for record in selected
                     ],
+                    # Resumen mínimo y seguro para construir respuestas por rol.
+                    # No incluye CPU, RAM, disco, SO, reinicios ni notas.
+                    "servers": [
+                        {
+                            "hostname": record.get("hostname"),
+                            "status_key": record.get("status_key"),
+                            "status_label": record.get("status_label"),
+                        }
+                        for record in selected
+                    ],
                     "freshness": freshness,
                 },
             }

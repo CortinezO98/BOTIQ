@@ -72,6 +72,13 @@ async def test_exact_hostname_response_is_deterministic(monkeypatch):
     assert "99%" in result["text"]
     assert "Crítico" in result["text"]
     assert result["structured_data"]["matched_servers"] == ["LETO"]
+    assert result["structured_data"]["servers"] == [
+        {
+            "hostname": "LETO",
+            "status_key": "critical",
+            "status_label": "Crítico",
+        }
+    ]
 
 
 @pytest.mark.asyncio
